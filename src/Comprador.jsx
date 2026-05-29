@@ -6,7 +6,12 @@ const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZi
 
 const BADGE = { A: { bg:'#E6F1FB', color:'#0C447C' }, B: { bg:'#FAEEDA', color:'#633806' }, C: { bg:'#E1F5EE', color:'#085041' } }
 const COMPRADOR_ID = 'deac539a-6a2f-416e-b05f-7b613059d2e9'
-const EMAILS_AUTORIZADOS = ['compras@trezaco.com.br','brandao@trezaco.com.br','benildo@trezaco.com.br','raphael@trezaco.com.br']
+const EMAILS_AUTORIZADOS = [
+  'compras@trezaco.com.br',
+  'brandao@trezaco.com.br',
+  'benildo@trezaco.com.br',
+  'raphael@trezaco.com.br',
+]
 
 async function patchSupabase(tabela, filtro, body) {
   await fetch(`${URL}/rest/v1/${tabela}?${filtro}`, {
@@ -114,6 +119,8 @@ export default function Comprador() {
   const [selecionado, setSelecionado] = useState(null)
   const [respostas, setRespostas] = useState([])
   const [historico, setHistorico] = useState([])
+  const [sugestoes, setSugestoes] = useState([])
+  const [buscandoSugestoes, setBuscandoSugestoes] = useState(false)
   const [fornecedoresMap, setFornecedoresMap] = useState({})
   const [novaResposta, setNovaResposta] = useState({ fornecedor_nome:'', preco_unitario:'', prazo_entrega_dias:'', observacoes:'' })
   const [salvando, setSalvando] = useState(false)
@@ -143,6 +150,7 @@ export default function Comprador() {
   async function abrirPedido(pedido) {
     setSelecionado(pedido)
     setHistorico([])
+    setSugestoes([])
 
     const data = await fetchSupabase('respostas_cotacao', `?pedido_id=eq.${pedido.id}&order=preco_unitario.asc`)
     const resps = Array.isArray(data) ? data : []
@@ -156,6 +164,9 @@ export default function Comprador() {
       if (Array.isArray(f) && f.length > 0) mapa[id] = f[0].nome
     }
     setFornecedoresMap(mapa)
+
+    // Busca sugestões de estoque + preço dos fornecedores
+    buscarSugestoesFornecedor(pedido)
 
     // Busca histórico de cotações anteriores para o mesmo item (outros pedidos)
     if (pedido.item_codigo) {
@@ -180,6 +191,157 @@ export default function Comprador() {
         setFornecedoresMap({...mapa})
       }
     }
+  }
+
+  async function buscarSugestoesFornecedor(pedido) {
+    setBuscandoSugestoes(true)
+    try {
+      const estoque = await fetchSupabase('estoque_fornecedor', `?quantidade=gt.0&select=*&order=data_referencia.desc&limit=2000`)
+      const precos = await fetchSupabase('tabela_precos_fornecedor', `?select=*&order=data_referencia.desc&limit=1000`)
+
+      if (!Array.isArray(estoque) || estoque.length === 0) {
+        setBuscandoSugestoes(false)
+        return
+      }
+
+      const desc = pedido.item_descricao.toUpperCase()
+      const filial = pedido.filial
+
+      // Normaliza string: remove espaços extras, padroniza separadores
+      function normalizar(s) {
+        return s.toUpperCase()
+          .replace(/\s+/g, ' ')
+          .replace(/X/g, 'X')
+          .trim()
+      }
+
+      // Extrai todos os números de uma string
+      function extrairNumeros(s) {
+        const nums = s.match(/\d+[,.]?\d*/g) || []
+        return nums.map(n => parseFloat(n.replace(',', '.')))
+      }
+
+      // Normaliza tipo do produto — mapeia nomenclaturas diferentes para o mesmo tipo
+      function extrairTipo(s) {
+        const S = normalizar(s)
+        // Tubos quadrados — todas nomenclaturas conhecidas
+        if (S.includes('QUADR') || S.includes('TUBO QUAD') || S.includes('TB QD') || S.includes('TB QD') || S.includes('TQ ') || (S.includes('TUBO FQ') && S.match(/\d+X\d+X\d+/))) return 'TUBO QUADRADO'
+        // Tubos retangulares
+        if (S.includes('TUBO RET') || S.includes('TUBO FR') || S.includes('TB RT') || S.includes('TB RET')) return 'TUBO RETANGULAR'
+        // Tubos redondos
+        if (S.includes('TUBO RED') || S.includes('TUBO IND') || S.includes('TUBO NBR5590') || S.includes('TUBO NBR 5590') || S.includes('TB RD') || S.includes('TB RED')) return 'TUBO REDONDO'
+        // Tubos fina frio
+        if (S.includes('TUBO FF') || S.includes('TUBO BF') || S.includes('TB FF') || S.includes(' FF ') && S.includes('TB ')) return 'TUBO FF'
+        // Tubos fina quente
+        if (S.includes('TUBO FQ') || S.includes('TB FQ')) return 'TUBO FQ'
+        // Tubos galvanizados
+        if (S.includes('TUBO GI') || S.includes('TUBO GV') || S.includes('TUBO ZC') || S.includes('GALV') || S.includes('TB GI') || S.includes('TB ZN') || S.includes('TZ ')) return 'TUBO GALVANIZADO'
+        if (S.includes('TUBO') || S.includes('TB ')) return 'TUBO'
+        // Chapas
+        if (S.includes('CHAPA FF') || S.includes('CHP FF') || (S.includes('CHP') && S.includes(' FF'))) return 'CHAPA FF'
+        if (S.includes('CHAPA FQ') || S.includes('CHP FQ') || S.includes('CHP DO') || (S.includes('CHP') && S.includes(' FQ'))) return 'CHAPA FQ'
+        if (S.includes('CHAPA ZC') || S.includes('CHAPA ZN') || S.includes('CHP ZC')) return 'CHAPA ZC'
+        if (S.includes('CHAPA') || S.includes('CHP ')) return 'CHAPA'
+        // Perfis
+        if (S.includes('PERFIL UDC') || S.includes('PE UE') || S.includes('PE UC') || (S.includes('PERFIL U') && S.includes('CALHA'))) return 'PERFIL UDC'
+        if (S.includes('PERFIL ZC') || S.includes('PE ZC')) return 'PERFIL ZC'
+        if (S.includes('PERFIL') || S.includes('PE ')) return 'PERFIL'
+        // Outros
+        if (S.includes('CANTONEIRA') || S.includes('CTN ') || S.includes('PE EQ')) return 'CANTONEIRA'
+        if (S.includes('VIGA') || S.includes('PERFIL W') || S.includes('PE W')) return 'VIGA'
+        if (S.includes('BR CHATA') || S.includes('BARRA CHATA')) return 'BARRA CHATA'
+        if (S.includes('BR RED') || S.includes('BARRA RED')) return 'BARRA REDONDA'
+        return S.split(' ')[0]
+      }
+
+      const tipoDesc = extrairTipo(desc)
+      const numerosDesc = extrairNumeros(desc)
+
+      function scoreSimilaridade(itemDesc) {
+        const B = normalizar(itemDesc)
+        let score = 0
+        let todasDimensoesBatem = false
+
+        // 1. Tipo deve bater — peso alto
+        const tipoB = extrairTipo(B)
+        if (tipoDesc === tipoB) score += 50
+        else if (tipoDesc.split(' ')[0] === tipoB.split(' ')[0]) score += 20
+        else return { score: 0, todasDimensoesBatem: false }
+
+        // 2. Compara números — cada número em comum vale muito
+        const numerosB = extrairNumeros(B)
+        let numerosEmComum = 0
+        let numerosTotal = numerosDesc.length
+
+        for (const n of numerosDesc) {
+          const match = numerosB.some(nb => Math.abs(nb - n) / Math.max(n, 0.01) < 0.005)
+          if (match) numerosEmComum++
+        }
+
+        if (numerosTotal > 0) {
+          const pctMatch = numerosEmComum / numerosTotal
+          score += Math.round(pctMatch * 50)
+          // Alta confiança: todas dimensões principais do PEDIDO aparecem no item E
+          // todas dimensões principais do ITEM aparecem no pedido (match bidirecional)
+          const dimsPedido = numerosDesc.filter(n => n < 1000)
+          const dimsItem = numerosB.filter(n => n < 1000)
+          const pedidoBateItem = dimsPedido.every(n => dimsItem.some(nb => Math.abs(nb - n) / Math.max(n, 0.01) < 0.005))
+          const itemBatePedido = dimsItem.every(n => dimsPedido.some(nb => Math.abs(nb - n) / Math.max(n, 0.01) < 0.005))
+          todasDimensoesBatem = dimsPedido.length > 0 && pedidoBateItem && itemBatePedido
+        }
+
+        return { score, todasDimensoesBatem }
+      }
+
+      // Faz match no estoque
+      const matches = estoque
+        .map(item => {
+          const { score, todasDimensoesBatem } = scoreSimilaridade(item.item_descricao)
+          return { ...item, score, todasDimensoesBatem }
+        })
+        .filter(item => item.score >= 60)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5)
+
+      // Para cada match, busca o preço
+      const sugestoesFinais = matches.map(item => {
+        const precosDoFornecedor = (Array.isArray(precos) ? precos : [])
+          .filter(p => p.fornecedor_nome === item.fornecedor_nome)
+
+        let melhorPreco = null
+        let melhorScore = 0
+
+        for (const p of precosDoFornecedor) {
+          const { score: s } = scoreSimilaridade(p.item_descricao)
+          if (s > melhorScore) {
+            melhorScore = s
+            melhorPreco = p
+          }
+        }
+
+        const preco = melhorPreco
+          ? (filial === 'Cascavel' ? melhorPreco.preco_cascavel : melhorPreco.preco_curitiba)
+          : null
+
+        // Alta confiança = todas dimensões batem exatamente
+        // Média = tipo bate mas dimensões parciais
+        const confianca = item.todasDimensoesBatem ? 'alta' : 'media'
+
+        return {
+          fornecedor: item.fornecedor_nome,
+          item_estoque: item.item_descricao,
+          quantidade_disponivel: item.quantidade,
+          preco_unitario: preco,
+          confianca,
+          espessura: item.espessura || null
+        }
+      })
+
+      setSugestoes(sugestoesFinais)
+    } catch (err) {
+      console.error('Erro ao buscar sugestões:', err)
+    }
+    setBuscandoSugestoes(false)
   }
 
   async function salvarResposta(e) {
@@ -241,6 +403,50 @@ export default function Comprador() {
           </div>
           {selecionado.observacoes && <div style={s.obs}>{selecionado.observacoes}</div>}
         </div>
+
+        {/* Card de sugestões automáticas */}
+        {(buscandoSugestoes || sugestoes.length > 0) && (
+          <div style={{ ...s.card, background:'#F0FBF7', border:'1px solid #1D9E75' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom: buscandoSugestoes ? 0 : 14 }}>
+              <span style={{ fontSize:16 }}>🤖</span>
+              <h3 style={{ fontSize:14, fontWeight:600, color:'#085041' }}>
+                {buscandoSugestoes ? 'Buscando disponibilidade nos fornecedores...' : `Estoque disponível — ${sugestoes.length} fornecedor${sugestoes.length !== 1 ? 'es' : ''} com o item`}
+              </h3>
+            </div>
+            {buscandoSugestoes && (
+              <div style={{ fontSize:13, color:'#0F6E56', marginTop:8 }}>Consultando planilhas importadas e fazendo match com Claude AI...</div>
+            )}
+            {sugestoes.map((s2, i) => (
+              <div key={i} style={{ background:'#fff', borderRadius:8, padding:'12px 14px', marginBottom:8, border:`1px solid ${s2.confianca === 'alta' ? '#1D9E75' : s2.confianca === 'media' ? '#EF9F27' : '#E0DED8'}` }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                  <div style={{ flex:1 }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+                      <span style={{ fontWeight:600, fontSize:15 }}>{s2.fornecedor}</span>
+                      <span style={{ fontSize:11, padding:'2px 7px', borderRadius:4, background: s2.confianca === 'alta' ? '#E1F5EE' : s2.confianca === 'media' ? '#FAEEDA' : '#F1EFE8', color: s2.confianca === 'alta' ? '#085041' : s2.confianca === 'media' ? '#633806' : '#888780', fontWeight:600 }}>
+                        {s2.confianca === 'alta' ? '✓ Alta confiança' : s2.confianca === 'media' ? '~ Média confiança' : '? Baixa confiança'}
+                      </span>
+                    </div>
+                    <div style={{ fontSize:13, color:'#5F5E5A', marginBottom:4 }}>{s2.item_estoque}</div>
+                    <div style={{ fontSize:12, color:'#888780' }}>📦 Estoque: <strong style={{ color: s2.quantidade_disponivel >= selecionado.quantidade ? '#085041' : '#A32D2D' }}>{s2.quantidade_disponivel?.toLocaleString('pt-BR')} kg</strong>
+                      {s2.quantidade_disponivel < selecionado.quantidade && <span style={{ color:'#A32D2D' }}> — insuficiente para {selecionado.quantidade} kg</span>}
+                    </div>
+                    {s2.observacao && <div style={{ fontSize:12, color:'#888780', marginTop:4, fontStyle:'italic' }}>{s2.observacao}</div>}
+                  </div>
+                  {s2.preco_unitario > 0 && (
+                    <div style={{ textAlign:'right', flexShrink:0, marginLeft:16 }}>
+                      <div style={{ fontSize:10, color:'#888780', marginBottom:2 }}>preço tabela</div>
+                      <div style={{ fontSize:20, fontWeight:700, color:'#185FA5' }}>R$ {parseFloat(s2.preco_unitario).toFixed(2)}<span style={{ fontSize:11, color:'#888780', fontWeight:400 }}>/kg</span></div>
+                      <div style={{ fontSize:12, color:'#5F5E5A' }}>Total: R$ {(s2.preco_unitario * selecionado.quantidade).toLocaleString('pt-BR', { minimumFractionDigits:2 })}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+            {!buscandoSugestoes && sugestoes.length === 0 && (
+              <div style={{ fontSize:13, color:'#5F5E5A', fontStyle:'italic' }}>Nenhum item correspondente encontrado nas planilhas importadas de hoje.</div>
+            )}
+          </div>
+        )}
 
         {/* Histórico de cotações anteriores */}
         {historico.length > 0 && (

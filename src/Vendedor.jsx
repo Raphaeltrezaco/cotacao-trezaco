@@ -9,10 +9,25 @@ const BADGE = {
 }
 
 const EMAILS_VENDEDORES = [
-  'brandao@trezaco.com.br',
+  'daniela@trezaco.com.br',
+  'aline@trezaco.com.br',
+  'brenda@trezaco.com.br',
+  'bruno@trezaco.com.br',
+  'gil@trezaco.com.br',
+  'junior@treza.com.br',
   'kamila@trezaco.com.br',
+  'kauana@trezaco.com.br',
+  'leila@trezaco.com.br',
+  'leonardo@trezaco.com.br',
+  'marcelo@trezaco.com.br',
+  'nayara@trezaco.com.br',
+  'sirlene@trezaco.com.br',
+  'vinicius@trezaco.com.br',
+  'thalita@trezaco.com.br',
+  'hadassa@trezaco.com.br',
   'compras@trezaco.com.br',
   'raphael@trezaco.com.br',
+  'brandao@trezaco.com.br',
   'benildo@trezaco.com.br',
 ]
 
@@ -254,19 +269,12 @@ export default function Vendedor() {
                 </div>
               </div>
 
-              <div style={s.row}>
-                <div style={s.field}>
+              <div style={s.field}>
                   <label style={s.label}>Filial</label>
                   <select style={s.input} value={form.filial} onChange={e => setForm(f => ({ ...f, filial: e.target.value }))}>
                     <option>Curitiba</option><option>Cascavel</option>
                   </select>
                 </div>
-                <div style={s.field}>
-                  <label style={s.label}>Prazo necessário (dias)</label>
-                  <input style={s.input} type="number" value={form.prazo_necessario}
-                    onChange={e => setForm(f => ({ ...f, prazo_necessario: e.target.value }))} placeholder="ex: 7" />
-                </div>
-              </div>
 
               <div style={s.field}>
                 <label style={s.label}>Observações</label>
