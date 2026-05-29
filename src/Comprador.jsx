@@ -99,9 +99,10 @@ function PedidoCard({ p, onClick, leadtime }) {
       <div style={{ flex:1 }}>
         <div style={{ display:'flex', gap:6, marginBottom:6, flexWrap:'wrap' }}>
           <span style={{ display:'inline-flex', alignItems:'center', padding:'3px 8px', borderRadius:5, fontSize:12, fontWeight:500, ...(BADGE[p.classe]||{}) }}>Classe {p.classe}</span>
-          {p.prazo_necessario && p.prazo_necessario <= 3 && <span style={{ display:'inline-flex', alignItems:'center', padding:'3px 8px', borderRadius:5, fontSize:12, fontWeight:500, background:'#FCEBEB', color:'#A32D2D' }}>Urgente</span>}
+          {p.numero_pedido && <span style={{ display:'inline-flex', alignItems:'center', padding:'3px 8px', borderRadius:5, fontSize:12, fontWeight:600, background:'#1D9E75', color:'#fff' }}>#{p.numero_pedido}</span>}
+          {p.numero_cotacao && <span style={{ display:'inline-flex', alignItems:'center', padding:'3px 8px', borderRadius:5, fontSize:12, fontWeight:500, background:'#F1EFE8', color:'#444441' }}>ORC #{p.numero_cotacao}</span>}
           {leadtime !== null && leadtime !== undefined && (
-            <span style={{ display:'inline-flex', alignItems:'center', padding:'3px 8px', borderRadius:5, fontSize:12, fontWeight:500, background:'#F1EFE8', color:'#444441' }}>⏱ {formatarLeadTime(leadtime)}</span>
+            <span style={{ display:'inline-flex', alignItems:'center', padding:'3px 8px', borderRadius:5, fontSize:12, fontWeight:500, background:'#E6F1FB', color:'#0C447C' }}>⏱ {formatarLeadTime(leadtime)}</span>
           )}
         </div>
         <div style={{ fontWeight:500, fontSize:15, marginBottom:3 }}>{p.item_descricao}</div>
@@ -129,9 +130,9 @@ export default function Comprador() {
   const [filtroFilial, setFiltroFilial] = useState('todas')
   const [filtroClasse, setFiltroClasse] = useState('todas')
 
-  if (!emailLogado) return <LoginComprador onLogin={setEmailLogado} />
+  useEffect(() => { if (emailLogado) carregarPedidos() }, [emailLogado])
 
-  useEffect(() => { carregarPedidos() }, [])
+  if (!emailLogado) return <LoginComprador onLogin={setEmailLogado} />
 
   async function carregarPedidos() {
     const data = await fetchSupabase('pedidos_cotacao', '?destino=eq.comprador&order=criado_em.desc')
@@ -371,7 +372,7 @@ export default function Comprador() {
     if (filtro === 'respondidos' && p.status === 'aberto') return false
     if (filtroFilial !== 'todas' && p.filial !== filtroFilial) return false
     if (filtroClasse !== 'todas' && p.classe !== filtroClasse) return false
-    if (busca && !p.item_descricao?.toLowerCase().includes(busca.toLowerCase()) && !p.item_codigo?.includes(busca)) return false
+    if (busca && !p.item_descricao?.toLowerCase().includes(busca.toLowerCase()) && !p.item_codigo?.includes(busca) && !p.numero_cotacao?.includes(busca) && !String(p.numero_pedido ?? '').includes(busca.replace('#',''))) return false
     return true
   })
 
@@ -398,7 +399,7 @@ export default function Comprador() {
           <div style={s.metaGrid}>
             <div><div style={s.metaLabel}>Quantidade</div><div style={s.metaVal}>{selecionado.quantidade} {selecionado.unidade}</div></div>
             <div><div style={s.metaLabel}>Filial</div><div style={s.metaVal}>{selecionado.filial}</div></div>
-            <div><div style={s.metaLabel}>Prazo necessário</div><div style={s.metaVal}>{selecionado.prazo_necessario||'—'} dias</div></div>
+            {selecionado.numero_cotacao && <div><div style={s.metaLabel}>Nº Cotação</div><div style={s.metaVal}>#{selecionado.numero_cotacao}</div></div>}
             <div><div style={s.metaLabel}>Lead time resposta</div><div style={s.metaVal}>{formatarLeadTime(leadtimes[selecionado.id])}</div></div>
           </div>
           {selecionado.observacoes && <div style={s.obs}>{selecionado.observacoes}</div>}

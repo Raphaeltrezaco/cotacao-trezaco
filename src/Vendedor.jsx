@@ -82,7 +82,7 @@ export default function Vendedor() {
   const [tab, setTab] = useState('novo')
   const [pedidos, setPedidos] = useState([])
   const [verTodos, setVerTodos] = useState(false)
-  const [form, setForm] = useState({ item_codigo: '', item_descricao: '', classe: '', quantidade: '', unidade: 'kg', filial: 'Curitiba', prazo_necessario: '', observacoes: '' })
+  const [form, setForm] = useState({ numero_cotacao: '', item_codigo: '', item_descricao: '', classe: '', quantidade: '', unidade: 'kg', filial: 'Curitiba', prazo_necessario: '', observacoes: '' })
   const [buscando, setBuscando] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [resultado, setResultado] = useState(null)
@@ -95,9 +95,9 @@ export default function Vendedor() {
   const [filtroClassePedidos, setFiltroClassePedidos] = useState('todos')
   const [precosPedidos, setPrecosPedidos] = useState({})
 
-  if (!usuario) return <LoginVendedor onLogin={u => { setUsuario(u) }} />
+  useEffect(() => { if (usuario) carregarPedidos() }, [verTodos, usuario?.id])
 
-  useEffect(() => { carregarPedidos() }, [verTodos, usuario])
+  if (!usuario) return <LoginVendedor onLogin={u => setUsuario(u)} />
 
   async function carregarPedidos() {
     const filtroUrl = verTodos
@@ -143,6 +143,7 @@ export default function Vendedor() {
     setResultado(null)
 
     const payload = {
+      numero_cotacao: form.numero_cotacao || null,
       item_codigo: form.item_codigo,
       item_descricao: form.item_descricao,
       classe: form.classe,
@@ -184,7 +185,7 @@ export default function Vendedor() {
   }
 
   function novoForm() {
-    setForm({ item_codigo: '', item_descricao: '', classe: '', quantidade: '', unidade: 'kg', filial: 'Curitiba', prazo_necessario: '', observacoes: '' })
+    setForm({ numero_cotacao: '', item_codigo: '', item_descricao: '', classe: '', quantidade: '', unidade: 'kg', filial: 'Curitiba', prazo_necessario: '', observacoes: '' })
     setResultado(null)
     setFornecedores([])
   }
@@ -233,6 +234,13 @@ export default function Vendedor() {
           <div style={s.card}>
             <h2 style={s.cardTitle}>Novo pedido de cotação</h2>
             <form onSubmit={handleSubmit} style={s.form}>
+              <div style={s.field}>
+                <label style={s.label}>Número do Orçamento</label>
+                <input style={s.input} value={form.numero_cotacao}
+                  onChange={e => setForm(f => ({ ...f, numero_cotacao: e.target.value }))}
+                  placeholder="ex: 172580" />
+              </div>
+
               <div style={s.field}>
                 <label style={s.label}>Código do item</label>
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -397,10 +405,12 @@ export default function Vendedor() {
                       <div key={p.id} style={{ background:'#fff', borderRadius:10, border: p.status==='respostas_recebidas' ? '1.5px solid #EF9F27' : '0.5px solid rgba(0,0,0,0.1)', padding:'1rem', marginBottom:8, cursor:'pointer', display:'flex', alignItems:'center', gap:12 }} onClick={() => abrirPedido(p)}>
                         <div style={{ flex:1 }}>
                           <div style={{ display:'flex', gap:6, marginBottom:6, flexWrap:'wrap' }}>
+                            {p.numero_pedido && <span style={{ ...s.badge, background:'#1D9E75', color:'#fff' }}>#{p.numero_pedido}</span>}
                             <span style={{ ...s.badge, ...(BADGE[p.classe]||{}) }}>Classe {p.classe}</span>
                             <span style={{ ...s.badge, background: p.destino==='comprador' ? '#E6F1FB' : '#FAEEDA', color: p.destino==='comprador' ? '#0C447C' : '#633806' }}>
                               {p.destino==='comprador' ? 'Comprador' : 'Vendedor'}
                             </span>
+                            {p.numero_cotacao && <span style={{ ...s.badge, background:'#F1EFE8', color:'#444441' }}>ORC #{p.numero_cotacao}</span>}
                             {p.status==='respostas_recebidas' && <span style={{ ...s.badge, background:'#FAEEDA', color:'#633806' }}>● Respondido</span>}
                           </div>
                           <div style={{ fontWeight:500, fontSize:15, marginBottom:3 }}>{p.item_descricao}</div>
