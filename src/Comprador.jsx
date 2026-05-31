@@ -227,42 +227,62 @@ export default function Comprador() {
 
       // Tabela de conversão polegadas → mm (diâmetros nominais de tubos)
       const POLEGADAS_MM = {
-        '1/2': 12.70, '5/8': 15.88, '3/4': 19.05, '7/8': 22.22,
+        // Frações pequenas (barras, cantoneiras)
+        '3/16': 4.76, '1/4': 6.35, '5/16': 7.94, '3/8': 9.52,
+        '7/16': 11.11, '1/2': 12.70, '9/16': 14.29, '5/8': 15.88,
+        '11/16': 17.46, '3/4': 19.05, '13/16': 20.64, '7/8': 22.22,
+        '15/16': 23.81,
+        // Inteiros e compostos (tubos)
         '1': 25.40,
         '1.1/8': 28.58, '1.1/4': 31.75, '1.3/8': 34.93,
-        '1.1/2': 38.10, '1.5/8': 41.28, '1.3/4': 44.45,
-        '2': 50.80, '2.1/2': 63.50, '3': 76.20,
+        '1.1/2': 38.10, '1.5/8': 41.28, '1.3/4': 44.45, '1.7/8': 47.63,
+        '2': 50.80, '2.1/4': 57.15, '2.1/2': 63.50, '2.3/4': 69.85,
+        '3': 76.20, '3.1/2': 88.90, '4': 101.60,
       }
 
       // Normaliza string: remove espaços extras
       function normalizar(s) {
-        return s.toUpperCase().replace(/\s+/g, ' ').trim()
+      function normalizar(s) {
+        // Normaliza "1 1/4" → "1.1/4", "2 1/2" → "2.1/2" etc.
+        return s.toUpperCase().replace(/\s+/g, ' ').trim().replace(/(\d+) (\d+\/\d+)/g, '$1.$2')
       }
-
       // Extrai dimensões numéricas convertendo polegadas para mm
       // Retorna apenas valores de dimensão (espessura/diâmetro/lado), ignora comprimento (6000)
       function extrairNumeros(s) {
         const S = normalizar(s)
         const resultado = []
 
-        // 1. Captura padrões de polegada: 1", 1.1/2", 3/4" etc.
-        // Ordem importa: tenta frações compostas antes de simples
-        const regexPol = /(\d+\.\d+\/\d+|\d+\/\d+|\d+)\s*[\"']/g
+        // 1. Captura frações de polegada COM aspas: 1", 1.1/2", 3/4"
+        const regexPolAspas = /(\d+\.\d+\/\d+|\d+\/\d+|\d+)\s*[\"']/g
         let m
-        while ((m = regexPol.exec(S)) !== null) {
+        let semPol = S
+        while ((m = regexPolAspas.exec(S)) !== null) {
           const mm = POLEGADAS_MM[m[1]]
-          if (mm) resultado.push(mm)
+          if (mm) { resultado.push(mm); semPol = semPol.replace(m[0], " ") }
         }
 
-        // 2. Captura números decimais (ponto ou vírgula), excluindo comprimentos (>=500)
-        // Remove a parte de polegadas já processada para não duplicar
-        const semPol = S.replace(/\d+\.\d+\/\d+\s*[\"']/g, ' ').replace(/\d+\/\d+\s*[\"']/g, ' ').replace(/\d+\s*[\"']/g, ' ')
+        // 2. Captura frações de polegada SEM aspas (ex: "BR REDONDA 3/8" no fim)
+        const regexPolNua = /(\d+\.\d+\/\d+|\d+\/\d+)(?=[\s,\-]*(?:[A-Za-z]|$))/g
+        while ((m = regexPolNua.exec(semPol)) !== null) {
+          const mm = POLEGADAS_MM[m[1]]
+          if (mm) { resultado.push(mm); semPol = semPol.slice(0, m.index) + " " + semPol.slice(m.index + m[0].length) }
+        }
+
+        // 3. Captura números decimais normais, excluindo comprimentos (>=500)
+        // 3. Números normais — filtra comprimentos e normas para barras/cantoneiras
+        const COMPRIMENTOS = new Set([6.0, 6.1, 7.5, 9.0, 12.0])
+        const NORMAS_NUM   = new Set([7007, 5590, 6591, 6652, 250, 345, 1010, 1008, 1006, 1020, 1045])
+        const isBarra = /BARRA|BR RED|B\.RED|BR\.RED|BR CHATA|BR\.CH|B\.CH|CANTONEIRA|CTN |VIGA|PFU|PFI/.test(S)
         const regexNum = /(\d+[.,]\d+|\d+)/g
         while ((m = regexNum.exec(semPol)) !== null) {
-          const val = parseFloat(m[1].replace(',', '.'))
-          // Ignora comprimentos (>=500) e valores muito pequenos (<0.5)
-          if (val >= 0.5 && val < 500) resultado.push(val)
+          const val = parseFloat(m[1].replace(",", "."))
+          if (val < 0.5 || val >= 500) continue
+          if (isBarra && (COMPRIMENTOS.has(val) || NORMAS_NUM.has(Math.round(val)) || val <= 2.0)) continue
+          resultado.push(val)
         }
+
+        }
+
 
         return resultado
       }
@@ -321,10 +341,12 @@ export default function Comprador() {
         if (S.includes('PERFIL ZC') || S.includes('PE ZC')) return 'PERFIL ZC'
         if (S.includes('PERFIL') || S.includes('PE ')) return 'PERFIL'
         // Outros
-        if (S.includes('CANTONEIRA') || S.includes('CTN ') || S.includes('PE EQ')) return 'CANTONEIRA'
+        if (S.includes('CANTONEIRA') || S.includes('CTN ') || S.includes('CTN	') || S.includes('PE EQ') || S.includes('ANGULO') || S.includes('L ')) return 'CANTONEIRA'
         if (S.includes('VIGA') || S.includes('PERFIL W') || S.includes('PE W')) return 'VIGA'
-        if (S.includes('BR CHATA') || S.includes('BARRA CHATA')) return 'BARRA CHATA'
-        if (S.includes('BR RED') || S.includes('BARRA RED')) return 'BARRA REDONDA'
+        if (S.includes('BR CHATA') || S.includes('BARRA CHATA') || S.includes('BR.CH') || S.includes('BARRA CH') || S.includes('B.CH')) return 'BARRA CHATA'
+        if (S.includes('BR RED') || S.includes('BARRA RED') || S.includes('BR REDONDA') || S.includes('B.RED') || S.includes('BR.RED') || S.includes('BARRA REDONDA')) return 'BARRA REDONDA'
+        if (S.includes('BR QUAD') || S.includes('BARRA QUAD') || S.includes('B.QUAD') || S.includes('BR.QUAD')) return 'BARRA QUADRADA'
+        if (S.includes('BR HEX') || S.includes('BARRA HEX') || S.includes('B.HEX')) return 'BARRA SEXTAVADA'
         return S.split(' ')[0]
       }
 
@@ -350,8 +372,9 @@ export default function Comprador() {
           else score -= 15 // acabamento diferente penaliza mas não descarta
         }
 
-        // 3. Compara dimensões — ordena ambas para comparação agnóstica a formato
-        // (resolve "esp x diam" vs "diam x esp" da Pana CXS)
+        // 3. Compara dimensões — ordena ambas (resolve "esp x diam" vs "diam x esp")
+        // Alta confiança: TODAS as dims do pedido aparecem no item
+        // Média confiança: dims principais (>5mm) do pedido aparecem no item
         const numerosB = extrairNumeros(B)
         const dimsA = [...numerosDesc].sort((a, b) => a - b)
         const dimsB = [...numerosB].sort((a, b) => a - b)
@@ -367,11 +390,12 @@ export default function Comprador() {
         if (numerosTotal > 0) {
           const pctMatch = numerosEmComum / numerosTotal
           score += Math.round(pctMatch * 50)
-          // Alta confiança: match bidirecional perfeito nas dimensões (ordenadas)
+          // Alta confiança: todas as dims DO PEDIDO aparecem no item
+          // (não exige que o item não tenha dims a mais — comprimento, norma etc.)
           const pedidoBateItem = dimsA.every(n => dimsB.some(nb => Math.abs(nb - n) / Math.max(n, 0.01) < 0.005))
-          const itemBatePedido = dimsB.every(n => dimsA.some(nb => Math.abs(nb - n) / Math.max(n, 0.01) < 0.005))
-          todasDimensoesBatem = dimsA.length > 0 && pedidoBateItem && itemBatePedido
+          todasDimensoesBatem = dimsA.length > 0 && pedidoBateItem
         }
+
 
         return { score, todasDimensoesBatem }
       }
