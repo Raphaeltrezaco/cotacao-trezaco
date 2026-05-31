@@ -281,9 +281,6 @@ export default function Comprador() {
           resultado.push(val)
         }
 
-        }
-
-
         return resultado
       }
 
