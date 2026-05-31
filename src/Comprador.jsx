@@ -197,16 +197,21 @@ export default function Comprador() {
   async function buscarSugestoesFornecedor(pedido) {
     setBuscandoSugestoes(true)
     try {
-      // Supabase limita 1000 por request — pagina até buscar tudo
+      // Supabase limita 1000/request — pagina com Range header
       const estoqueAll = []
-      let offset = 0
+      let from = 0
+      const PAGE = 1000
       while (true) {
-        const page = await fetchSupabase('estoque_fornecedor',
-          `?quantidade=gt.0&select=*&order=data_referencia.desc&limit=1000&offset=${offset}`)
+        const to = from + PAGE - 1
+        const res = await fetch(`${URL}/rest/v1/estoque_fornecedor?quantidade=gt.0&select=*&order=data_referencia.desc`, {
+          headers: { 'apikey': KEY, 'Authorization': `Bearer ${KEY}`, 'Range': `${from}-${to}`, 'Range-Unit': 'items' }
+        })
+        if (!res.ok) break
+        const page = await res.json()
         if (!Array.isArray(page) || page.length === 0) break
         estoqueAll.push(...page)
-        if (page.length < 1000) break
-        offset += 1000
+        if (page.length < PAGE) break
+        from += PAGE
       }
       const estoque = estoqueAll
 
