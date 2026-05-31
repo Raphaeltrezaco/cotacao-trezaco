@@ -197,7 +197,18 @@ export default function Comprador() {
   async function buscarSugestoesFornecedor(pedido) {
     setBuscandoSugestoes(true)
     try {
-      const estoque = await fetchSupabase('estoque_fornecedor', `?quantidade=gt.0&select=*&order=data_referencia.desc&limit=10000`)
+      // Supabase limita 1000 por request — pagina até buscar tudo
+      const estoqueAll = []
+      let offset = 0
+      while (true) {
+        const page = await fetchSupabase('estoque_fornecedor',
+          `?quantidade=gt.0&select=*&order=data_referencia.desc&limit=1000&offset=${offset}`)
+        if (!Array.isArray(page) || page.length === 0) break
+        estoqueAll.push(...page)
+        if (page.length < 1000) break
+        offset += 1000
+      }
+      const estoque = estoqueAll
 
       const precos = await fetchSupabase('tabela_precos_fornecedor', `?select=*&order=data_referencia.desc&limit=5000`)
 
