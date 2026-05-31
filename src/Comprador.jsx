@@ -223,7 +223,9 @@ export default function Comprador() {
 
       // Normaliza string: remove espaços e normaliza "1 1/4" → "1.1/4"
       function normalizar(s) {
-        return s.toUpperCase().replace(/\s+/g, ' ').trim().replace(/(\d+) (\d+\/\d+)/g, '$1.$2')
+        return s.toUpperCase().replace(/\s+/g, ' ').trim()
+          .replace(/(\d+) X (\d+\/\d+)/g, '$1X$2')       // "1 X 1/4" → "1X1/4"
+          .replace(/\b([1-9]) (\d+\/\d+)/g, '$1.$2')     // "1 1/4" → "1.1/4" (só dígito único)
       }
 
       // Extrai dimensões convertendo polegadas para mm
@@ -246,7 +248,7 @@ export default function Comprador() {
           const mm = POL[m[1]]; if (mm) { res.push(mm); sem = sem.replace(m[0],' ') }
         }
         // 2. Sem aspas no final
-        const rN = /(\d+\.\d+\/\d+|\d+\/\d+)(?=[\s,\-]*(?:[A-Za-z]|$))/g
+        const rN = /(\d+\.\d+\/\d+|\d+\/\d+)(?=[\s,\-]*(?:[A-Za-z"]|$))/g
         while ((m = rN.exec(sem)) !== null) {
           const mm = POL[m[1]]; if (mm) { res.push(mm); sem = sem.slice(0,m.index)+' '+sem.slice(m.index+m[0].length) }
         }
@@ -297,7 +299,7 @@ export default function Comprador() {
         // Outros
         if (S.includes('CANTONEIRA') || S.includes('CTN ') || S.includes('PE EQ')) return 'CANTONEIRA'
         if (S.includes('VIGA') || S.includes('PERFIL W') || S.includes('PE W')) return 'VIGA'
-        if (S.includes('BR CHATA') || S.includes('BARRA CHATA') || S.includes('BR.CH') || S.includes('B.CH')) return 'BARRA CHATA'
+        if (S.includes('BR CHATA') || S.includes('BARRA CHATA') || S.includes('BR.CH') || S.includes('B.CH') || /^BCH\s/.test(S)) return 'BARRA CHATA'
         if (S.includes('BR RED') || S.includes('BARRA RED') || S.includes('BR REDONDA') || S.includes('B.RED') || S.includes('BR.RED')) return 'BARRA REDONDA'
         return S.split(' ')[0]
       }
