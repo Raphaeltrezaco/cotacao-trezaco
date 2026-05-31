@@ -197,8 +197,9 @@ export default function Comprador() {
   async function buscarSugestoesFornecedor(pedido) {
     setBuscandoSugestoes(true)
     try {
-      const estoque = await fetchSupabase('estoque_fornecedor', `?quantidade=gt.0&select=*&order=data_referencia.desc&limit=2000`)
-      const precos = await fetchSupabase('tabela_precos_fornecedor', `?select=*&order=data_referencia.desc&limit=1000`)
+      const estoque = await fetchSupabase('estoque_fornecedor', `?quantidade=gt.0&select=*&order=data_referencia.desc&limit=10000`)
+
+      const precos = await fetchSupabase('tabela_precos_fornecedor', `?select=*&order=data_referencia.desc&limit=5000`)
 
       if (!Array.isArray(estoque) || estoque.length === 0) {
         setBuscandoSugestoes(false)
