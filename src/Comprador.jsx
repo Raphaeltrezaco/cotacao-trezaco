@@ -197,25 +197,21 @@ export default function Comprador() {
   async function buscarSugestoesFornecedor(pedido) {
     setBuscandoSugestoes(true)
     try {
-      // Supabase limita 1000/request — pagina com Range header
       const estoqueAll = []
-      let from = 0
-      const PAGE = 1000
+      let _from = 0
       while (true) {
-        const to = from + PAGE - 1
-        const res = await fetch(`${URL}/rest/v1/estoque_fornecedor?quantidade=gt.0&select=*&order=data_referencia.desc`, {
-          headers: { 'apikey': KEY, 'Authorization': `Bearer ${KEY}`, 'Range': `${from}-${to}`, 'Range-Unit': 'items' }
+        const _res = await fetch(`${URL}/rest/v1/estoque_fornecedor?quantidade=gt.0&select=*&order=data_referencia.desc`, {
+          headers: { 'apikey': KEY, 'Authorization': `Bearer ${KEY}`, 'Range': `${_from}-${_from+999}`, 'Range-Unit': 'items' }
         })
-        if (!res.ok) break
-        const page = await res.json()
-        if (!Array.isArray(page) || page.length === 0) break
-        estoqueAll.push(...page)
-        if (page.length < PAGE) break
-        from += PAGE
+        if (!_res.ok) break
+        const _page = await _res.json()
+        if (!Array.isArray(_page) || _page.length === 0) break
+        estoqueAll.push(..._page)
+        if (_page.length < 1000) break
+        _from += 1000
       }
       const estoque = estoqueAll
-
-      const precos = await fetchSupabase('tabela_precos_fornecedor', `?select=*&order=data_referencia.desc&limit=5000`)
+      const precos = await fetchSupabase('tabela_precos_fornecedor', `?select=*&order=data_referencia.desc&limit=1000`)
 
       if (!Array.isArray(estoque) || estoque.length === 0) {
         setBuscandoSugestoes(false)
@@ -225,108 +221,69 @@ export default function Comprador() {
       const desc = pedido.item_descricao.toUpperCase()
       const filial = pedido.filial
 
-      // Tabela de conversão polegadas → mm (diâmetros nominais de tubos)
-      const POLEGADAS_MM = {
-        // Frações pequenas (barras, cantoneiras)
-        '3/16': 4.76, '1/4': 6.35, '5/16': 7.94, '3/8': 9.52,
-        '7/16': 11.11, '1/2': 12.70, '9/16': 14.29, '5/8': 15.88,
-        '11/16': 17.46, '3/4': 19.05, '13/16': 20.64, '7/8': 22.22,
-        '15/16': 23.81,
-        // Inteiros e compostos (tubos)
-        '1': 25.40,
-        '1.1/8': 28.58, '1.1/4': 31.75, '1.3/8': 34.93,
-        '1.1/2': 38.10, '1.5/8': 41.28, '1.3/4': 44.45, '1.7/8': 47.63,
-        '2': 50.80, '2.1/4': 57.15, '2.1/2': 63.50, '2.3/4': 69.85,
-        '3': 76.20, '3.1/2': 88.90, '4': 101.60,
-      }
-
-      // Normaliza string: remove espaços extras
+      // Normaliza string: remove espaços e normaliza "1 1/4" → "1.1/4"
       function normalizar(s) {
-      function normalizar(s) {
-        // Normaliza "1 1/4" → "1.1/4", "2 1/2" → "2.1/2" etc.
         return s.toUpperCase().replace(/\s+/g, ' ').trim().replace(/(\d+) (\d+\/\d+)/g, '$1.$2')
       }
-      // Extrai dimensões numéricas convertendo polegadas para mm
-      // Retorna apenas valores de dimensão (espessura/diâmetro/lado), ignora comprimento (6000)
+
+      // Extrai dimensões convertendo polegadas para mm
       function extrairNumeros(s) {
+        const POL = {
+          '3/16':4.76,'1/4':6.35,'5/16':7.94,'3/8':9.52,'7/16':11.11,
+          '1/2':12.70,'9/16':14.29,'5/8':15.88,'11/16':17.46,'3/4':19.05,
+          '13/16':20.64,'7/8':22.22,'15/16':23.81,'1':25.40,
+          '1.1/8':28.58,'1.1/4':31.75,'1.3/8':34.93,'1.1/2':38.10,
+          '1.5/8':41.28,'1.3/4':44.45,'1.7/8':47.63,'2':50.80,
+          '2.1/4':57.15,'2.1/2':63.50,'2.3/4':69.85,'3':76.20,'3.1/2':88.90,'4':101.60
+        }
         const S = normalizar(s)
-        const resultado = []
-
-        // 1. Captura frações de polegada COM aspas: 1", 1.1/2", 3/4"
-        const regexPolAspas = /(\d+\.\d+\/\d+|\d+\/\d+|\d+)\s*[\"']/g
+        const res = []
+        let sem = S
         let m
-        let semPol = S
-        while ((m = regexPolAspas.exec(S)) !== null) {
-          const mm = POLEGADAS_MM[m[1]]
-          if (mm) { resultado.push(mm); semPol = semPol.replace(m[0], " ") }
+        // 1. Com aspas
+        const rA = /(\d+\.\d+\/\d+|\d+\/\d+|\d+)\s*[\"']/g
+        while ((m = rA.exec(S)) !== null) {
+          const mm = POL[m[1]]; if (mm) { res.push(mm); sem = sem.replace(m[0],' ') }
         }
-
-        // 2. Captura frações de polegada SEM aspas (ex: "BR REDONDA 3/8" no fim)
-        const regexPolNua = /(\d+\.\d+\/\d+|\d+\/\d+)(?=[\s,\-]*(?:[A-Za-z]|$))/g
-        while ((m = regexPolNua.exec(semPol)) !== null) {
-          const mm = POLEGADAS_MM[m[1]]
-          if (mm) { resultado.push(mm); semPol = semPol.slice(0, m.index) + " " + semPol.slice(m.index + m[0].length) }
+        // 2. Sem aspas no final
+        const rN = /(\d+\.\d+\/\d+|\d+\/\d+)(?=[\s,\-]*(?:[A-Za-z]|$))/g
+        while ((m = rN.exec(sem)) !== null) {
+          const mm = POL[m[1]]; if (mm) { res.push(mm); sem = sem.slice(0,m.index)+' '+sem.slice(m.index+m[0].length) }
         }
-
-        // 3. Captura números decimais normais, excluindo comprimentos (>=500)
-        // 3. Números normais — filtra comprimentos e normas para barras/cantoneiras
-        const COMPRIMENTOS = new Set([6.0, 6.1, 7.5, 9.0, 12.0])
-        const NORMAS_NUM   = new Set([7007, 5590, 6591, 6652, 250, 345, 1010, 1008, 1006, 1020, 1045])
-        const isBarra = /BARRA|BR RED|B\.RED|BR\.RED|BR CHATA|BR\.CH|B\.CH|CANTONEIRA|CTN |VIGA|PFU|PFI/.test(S)
-        const regexNum = /(\d+[.,]\d+|\d+)/g
-        while ((m = regexNum.exec(semPol)) !== null) {
-          const val = parseFloat(m[1].replace(",", "."))
-          if (val < 0.5 || val >= 500) continue
-          if (isBarra && (COMPRIMENTOS.has(val) || NORMAS_NUM.has(Math.round(val)) || val <= 2.0)) continue
-          resultado.push(val)
+        // 3. Decimais normais
+        const COMP = new Set([6,6.1,7.5,9,12])
+        const NORM = new Set([7007,5590,6591,6652,250,345,1010,1008,1006,1020,1045])
+        const isBarra = /BARRA|BR RED|B\.RED|BR CHATA|BR\.CH|B\.CH|CANTONEIRA|CTN |VIGA|PFU|PFI/.test(S)
+        const sf = sem.replace(/\d+\.\d+\/\d+/g,' ').replace(/\d+\/\d+/g,' ')
+        const rN2 = /(\d+[.,]\d+|\d+)/g
+        while ((m = rN2.exec(sf)) !== null) {
+          const v = parseFloat(m[1].replace(',','.'))
+          if (v < 0.5 || v >= 500) continue
+          if (isBarra && (COMP.has(v)||NORM.has(Math.round(v))||v<=2)) continue
+          res.push(v)
         }
-
-        return resultado
-      }
-
-      // Normaliza acabamento: FF (fina frio), FQ (fina quente), GI (galvanizado)
-      function extrairAcabamento(s) {
-        const S = normalizar(s)
-        // Pana CXS: começa com "TF " = Tubo FF (fina frio)
-        if (/^TF\s+[\d.]/.test(S)) return 'FF'
-        if (/^TQ\s+[\d.]/.test(S)) return 'FQ'
-        if (S.includes(' FF') || S.includes(' BF') || S.includes('FINA FRIO')) return 'FF'
-        if (S.includes(' FQ') || S.includes('FINA QUENTE')) return 'FQ'
-        if (S.includes(' GI') || S.includes(' GV') || S.includes('GALV') || S.includes(' ZN')) return 'GI'
-        return null
+        return res
       }
 
       // Normaliza tipo do produto — mapeia nomenclaturas diferentes para o mesmo tipo
       function extrairTipo(s) {
         const S = normalizar(s)
-
-        // Pana CXS: formato "TF 1.20x25.40x6000" — TF=redondo FF, TQ=quadrado FQ
-        // Detecta por padrão: 2 letras + espaço + número decimal
-        if (/^TF\s+[\d.]/.test(S)) return 'TUBO REDONDO'
-        if (/^TQ\s+[\d.]/.test(S)) return 'TUBO QUADRADO'
-        if (/^TR\s+[\d.]/.test(S)) return 'TUBO RETANGULAR'
-
-        // Tubos quadrados
-        if (S.includes('QUADR') || S.includes('TUBO QUAD') || S.includes('TUBO QD') || S.includes('TB QD')) return 'TUBO QUADRADO'
+        // Tubos quadrados — todas nomenclaturas conhecidas
+        if (S.includes('QUADR') || S.includes('TUBO QUAD') || S.includes('TB QD') || S.includes('TB QD') || S.includes('TQ ') || (S.includes('TUBO FQ') && S.match(/\d+X\d+X\d+/))) return 'TUBO QUADRADO'
         // Tubos retangulares
         if (S.includes('TUBO RET') || S.includes('TUBO FR') || S.includes('TB RT') || S.includes('TB RET')) return 'TUBO RETANGULAR'
-        // Tubos redondos com nomenclatura explicita
-        if (S.includes('TUBO RED') || S.includes('TUBO IND') || S.includes('TUBO NBR') || S.includes('TB RD') || S.includes('TB RED')) return 'TUBO REDONDO'
-        // Tubos galvanizados
-        if (S.includes('TUBO GI') || S.includes('TUBO GV') || S.includes('TUBO ZC') || S.includes('GALV') || S.includes('TB GI') || S.includes('TB ZN') || S.includes('TZ ')) return 'TUBO GALVANIZADO'
-        // TUBO FF / TUBO FQ / TB FF / TB FQ sem qualificador (ex: Marcegaglia 'TUBO FF - (40X40X2,00X6000)')
-        // Usa as dimensoes para distinguir: redondo=1 lado, quadrado=2 lados iguais, retangular=2 lados diferentes
-        if (S.includes('TUBO FF') || S.includes('TUBO FQ') || S.includes('TB FF') || S.includes('TB FQ')) {
-          const dims = extrairNumeros(s)
-          const lados = dims.filter(d => d > 5)
+        // Tubos redondos
+        if (S.includes('TUBO RED') || S.includes('TUBO IND') || S.includes('TUBO NBR5590') || S.includes('TUBO NBR 5590') || S.includes('TB RD') || S.includes('TB RED')) return 'TUBO REDONDO'
+        // Tubos FF/FQ sem qualificador (Marcegaglia: "TUBO FF - (40X40X2,00)")
+        // Usa dimensões para distinguir redondo/quadrado/retangular
+        if (S.includes('TUBO FF') || S.includes('TUBO FQ') || S.includes('TB FF') || S.includes('TB FQ') || S.includes('TUBO BF')) {
+          const lados = extrairNumeros(s).filter(d => d > 5)
           if (lados.length === 1) return 'TUBO REDONDO'
-          if (lados.length === 2) {
-            return Math.abs(lados[0] - lados[1]) / Math.max(lados[0], 0.01) < 0.01
-              ? 'TUBO QUADRADO'
-              : 'TUBO RETANGULAR'
-          }
+          if (lados.length === 2) return Math.abs(lados[0]-lados[1])/Math.max(lados[0],0.01)<0.01 ? 'TUBO QUADRADO' : 'TUBO RETANGULAR'
           return 'TUBO REDONDO'
         }
+        // Tubos galvanizados
+        if (S.includes('TUBO GI') || S.includes('TUBO GV') || S.includes('TUBO ZC') || S.includes('GALV') || S.includes('TB GI') || S.includes('TB ZN') || S.includes('TZ ')) return 'TUBO GALVANIZADO'
         if (S.includes('TUBO') || S.includes('TB ')) return 'TUBO'
         // Chapas
         if (S.includes('CHAPA FF') || S.includes('CHP FF') || (S.includes('CHP') && S.includes(' FF'))) return 'CHAPA FF'
@@ -338,17 +295,23 @@ export default function Comprador() {
         if (S.includes('PERFIL ZC') || S.includes('PE ZC')) return 'PERFIL ZC'
         if (S.includes('PERFIL') || S.includes('PE ')) return 'PERFIL'
         // Outros
-        if (S.includes('CANTONEIRA') || S.includes('CTN ') || S.includes('CTN	') || S.includes('PE EQ') || S.includes('ANGULO') || S.includes('L ')) return 'CANTONEIRA'
+        if (S.includes('CANTONEIRA') || S.includes('CTN ') || S.includes('PE EQ')) return 'CANTONEIRA'
         if (S.includes('VIGA') || S.includes('PERFIL W') || S.includes('PE W')) return 'VIGA'
-        if (S.includes('BR CHATA') || S.includes('BARRA CHATA') || S.includes('BR.CH') || S.includes('BARRA CH') || S.includes('B.CH')) return 'BARRA CHATA'
-        if (S.includes('BR RED') || S.includes('BARRA RED') || S.includes('BR REDONDA') || S.includes('B.RED') || S.includes('BR.RED') || S.includes('BARRA REDONDA')) return 'BARRA REDONDA'
-        if (S.includes('BR QUAD') || S.includes('BARRA QUAD') || S.includes('B.QUAD') || S.includes('BR.QUAD')) return 'BARRA QUADRADA'
-        if (S.includes('BR HEX') || S.includes('BARRA HEX') || S.includes('B.HEX')) return 'BARRA SEXTAVADA'
+        if (S.includes('BR CHATA') || S.includes('BARRA CHATA') || S.includes('BR.CH') || S.includes('B.CH')) return 'BARRA CHATA'
+        if (S.includes('BR RED') || S.includes('BARRA RED') || S.includes('BR REDONDA') || S.includes('B.RED') || S.includes('BR.RED')) return 'BARRA REDONDA'
         return S.split(' ')[0]
       }
 
-      const tipoDesc = extrairTipo(desc)
-      const acabamentoDesc = extrairAcabamento(desc)
+      // Pana CXS: TF/TQ/TR + número
+      function normalizarTipoCXS(s) {
+        const S = normalizar(s)
+        if (/^TF\s+[\d.]/.test(S)) return 'TUBO REDONDO'
+        if (/^TQ\s+[\d.]/.test(S)) return 'TUBO QUADRADO'
+        if (/^TR\s+[\d.]/.test(S)) return 'TUBO RETANGULAR'
+        return null
+      }
+
+      const tipoDesc = normalizarTipoCXS(desc) || extrairTipo(desc)
       const numerosDesc = extrairNumeros(desc)
 
       function scoreSimilaridade(itemDesc) {
@@ -357,42 +320,31 @@ export default function Comprador() {
         let todasDimensoesBatem = false
 
         // 1. Tipo deve bater — peso alto
-        const tipoB = extrairTipo(B)
+        const tipoB = normalizarTipoCXS(B) || extrairTipo(B)
         if (tipoDesc === tipoB) score += 50
         else if (tipoDesc.split(' ')[0] === tipoB.split(' ')[0]) score += 20
         else return { score: 0, todasDimensoesBatem: false }
 
-        // 2. Acabamento: bônus se bater, não penaliza se um dos lados for null
-        const acabamentoB = extrairAcabamento(B)
-        if (acabamentoDesc && acabamentoB) {
-          if (acabamentoDesc === acabamentoB) score += 10
-          else score -= 15 // acabamento diferente penaliza mas não descarta
-        }
-
-        // 3. Compara dimensões — ordena ambas (resolve "esp x diam" vs "diam x esp")
-        // Alta confiança: TODAS as dims do pedido aparecem no item
-        // Média confiança: dims principais (>5mm) do pedido aparecem no item
+        // 2. Compara números — cada número em comum vale muito
         const numerosB = extrairNumeros(B)
-        const dimsA = [...numerosDesc].sort((a, b) => a - b)
-        const dimsB = [...numerosB].sort((a, b) => a - b)
-
         let numerosEmComum = 0
-        const numerosTotal = dimsA.length
+        let numerosTotal = numerosDesc.length
 
-        for (const n of dimsA) {
-          const match = dimsB.some(nb => Math.abs(nb - n) / Math.max(n, 0.01) < 0.005)
+        for (const n of numerosDesc) {
+          const match = numerosB.some(nb => Math.abs(nb - n) / Math.max(n, 0.01) < 0.005)
           if (match) numerosEmComum++
         }
 
         if (numerosTotal > 0) {
           const pctMatch = numerosEmComum / numerosTotal
           score += Math.round(pctMatch * 50)
-          // Alta confiança: todas as dims DO PEDIDO aparecem no item
-          // (não exige que o item não tenha dims a mais — comprimento, norma etc.)
-          const pedidoBateItem = dimsA.every(n => dimsB.some(nb => Math.abs(nb - n) / Math.max(n, 0.01) < 0.005))
-          todasDimensoesBatem = dimsA.length > 0 && pedidoBateItem
+          // Alta confiança: todas dimensões principais do PEDIDO aparecem no item E
+          // todas dimensões principais do ITEM aparecem no pedido (match bidirecional)
+          const dimsPedido = numerosDesc.filter(n => n < 1000)
+          const dimsItem = numerosB.filter(n => n < 1000)
+          const pedidoBateItem = dimsPedido.every(n => dimsItem.some(nb => Math.abs(nb - n) / Math.max(n, 0.01) < 0.005))
+          todasDimensoesBatem = dimsPedido.length > 0 && pedidoBateItem
         }
-
 
         return { score, todasDimensoesBatem }
       }
