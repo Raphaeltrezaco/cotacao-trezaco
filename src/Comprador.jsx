@@ -384,7 +384,7 @@ export default function Comprador() {
         })
         .filter(item => item.score >= 60)
         .sort((a, b) => b.score - a.score)
-        .slice(0, 5)
+        .slice(0, 10)
 
       // Para cada match, busca o preço
       const sugestoesFinais = matches.map(item => {
