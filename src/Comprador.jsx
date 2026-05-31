@@ -496,13 +496,30 @@ export default function Comprador() {
                     </div>
                     {s2.observacao && <div style={{ fontSize:12, color:'#888780', marginTop:4, fontStyle:'italic' }}>{s2.observacao}</div>}
                   </div>
-                  {s2.preco_unitario > 0 && (
-                    <div style={{ textAlign:'right', flexShrink:0, marginLeft:16 }}>
-                      <div style={{ fontSize:10, color:'#888780', marginBottom:2 }}>preço tabela</div>
-                      <div style={{ fontSize:20, fontWeight:700, color:'#185FA5' }}>R$ {parseFloat(s2.preco_unitario).toFixed(2)}<span style={{ fontSize:11, color:'#888780', fontWeight:400 }}>/kg</span></div>
-                      <div style={{ fontSize:12, color:'#5F5E5A' }}>Total: R$ {(s2.preco_unitario * selecionado.quantidade).toLocaleString('pt-BR', { minimumFractionDigits:2 })}</div>
-                    </div>
-                  )}
+                  <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:8, flexShrink:0, marginLeft:16 }}>
+                    {s2.preco_unitario > 0 && (
+                      <div style={{ textAlign:'right' }}>
+                        <div style={{ fontSize:10, color:'#888780', marginBottom:2 }}>preço tabela</div>
+                        <div style={{ fontSize:20, fontWeight:700, color:'#185FA5' }}>R$ {parseFloat(s2.preco_unitario).toFixed(2)}<span style={{ fontSize:11, color:'#888780', fontWeight:400 }}>/kg</span></div>
+                        <div style={{ fontSize:12, color:'#5F5E5A' }}>Total: R$ {(s2.preco_unitario * selecionado.quantidade).toLocaleString('pt-BR', { minimumFractionDigits:2 })}</div>
+                      </div>
+                    )}
+                    <button
+                      onClick={() => {
+                        setNovaResposta(prev => ({
+                          ...prev,
+                          fornecedor_nome: s2.fornecedor,
+                          preco_unitario: s2.preco_unitario > 0 ? String(parseFloat(s2.preco_unitario).toFixed(2)) : prev.preco_unitario,
+                          observacoes: s2.item_estoque || prev.observacoes
+                        }))
+                        // Rolar para o formulário
+                        setTimeout(() => document.getElementById('form-resposta')?.scrollIntoView({ behavior: 'smooth' }), 100)
+                      }}
+                      style={{ background:'#185FA5', color:'#fff', border:'none', borderRadius:8, padding:'7px 14px', fontSize:13, cursor:'pointer', fontWeight:600, whiteSpace:'nowrap' }}
+                    >
+                      Usar este ↓
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -539,7 +556,7 @@ export default function Comprador() {
           </div>
         )}
 
-        <div style={s.card}>
+        <div id="form-resposta" style={s.card}>
           <h3 style={s.sectionTitle}>Lançar resposta do fornecedor</h3>
           <form onSubmit={salvarResposta} style={s.form}>
             <div style={s.row}>
