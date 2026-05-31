@@ -345,7 +345,13 @@ export default function Comprador() {
           const dimsPedido = numerosDesc.filter(n => n < 1000)
           const dimsItem = numerosB.filter(n => n < 1000)
           const pedidoBateItem = dimsPedido.every(n => dimsItem.some(nb => Math.abs(nb - n) / Math.max(n, 0.01) < 0.005))
-          todasDimensoesBatem = dimsPedido.length > 0 && pedidoBateItem
+          // Para tubos quadrados: checar que item nao e retangular (40x40 nao deve casar com 40x80)
+          const ladosPedido = dimsPedido.filter(n => n > 5).sort((a,b) => a-b)
+          const ladosItem = dimsItem.filter(n => n > 5).sort((a,b) => a-b)
+          const isPedidoQuad = tipoDesc === "TUBO QUADRADO" && ladosPedido.length >= 2 && Math.abs(ladosPedido[0] - ladosPedido[ladosPedido.length-1]) / Math.max(ladosPedido[0], 0.01) < 0.01
+          const isItemRet = ladosItem.length >= 2 && Math.abs(ladosItem[0] - ladosItem[ladosItem.length-1]) / Math.max(ladosItem[0], 0.01) >= 0.01
+          const quadOk = !(isPedidoQuad && isItemRet)
+          todasDimensoesBatem = dimsPedido.length > 0 && pedidoBateItem && quadOk
         }
 
         return { score, todasDimensoesBatem }
