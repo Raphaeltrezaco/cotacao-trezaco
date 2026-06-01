@@ -106,7 +106,7 @@ function PedidoCard({ p, onClick, leadtime }) {
           )}
         </div>
         <div style={{ fontWeight:500, fontSize:15, marginBottom:3 }}>{p.item_descricao}</div>
-        <div style={{ fontSize:12, color:'#888780' }}>{p.quantidade} {p.unidade} · {p.filial} · {new Date(p.criado_em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>
+        <div style={{ fontSize:12, color:'#888780' }}>{p.usuarios?.nome && <span style={{ fontWeight:500, color:'#444441' }}>{p.usuarios.nome} · </span>}{p.quantidade} {p.unidade} · {p.filial} · {new Date(p.criado_em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>
       </div>
       <div style={{ fontSize:18, color:'#888780' }}>›</div>
     </div>
@@ -120,6 +120,10 @@ export default function Comprador() {
   const [selecionado, setSelecionado] = useState(null)
   const [respostas, setRespostas] = useState([])
   const [historico, setHistorico] = useState([])
+  const [editandoComp, setEditandoComp] = useState(false)
+  const [formEdicaoComp, setFormEdicaoComp] = useState({})
+  const [logEdicaoComp, setLogEdicaoComp] = useState([])
+  const [showLogComp, setShowLogComp] = useState(false)
   const [sugestoes, setSugestoes] = useState([])
   const [buscandoSugestoes, setBuscandoSugestoes] = useState(false)
   const [fornecedoresMap, setFornecedoresMap] = useState({})
@@ -135,7 +139,7 @@ export default function Comprador() {
   if (!emailLogado) return <LoginComprador onLogin={setEmailLogado} />
 
   async function carregarPedidos() {
-    const data = await fetchSupabase('pedidos_cotacao', '?destino=eq.comprador&order=criado_em.desc')
+    const data = await fetchSupabase('pedidos_cotacao', '?order=criado_em.desc&select=*,usuarios(nome)')
     const pedidosList = Array.isArray(data) ? data : []
     setPedidos(pedidosList)
     const ltMap = {}
@@ -148,10 +152,44 @@ export default function Comprador() {
     setLeadtimes(ltMap)
   }
 
+  async function salvarEdicaoComp(selecionado) {
+    const campos = ['item_descricao', 'classe', 'quantidade', 'unidade', 'filial', 'prazo_necessario', 'observacoes']
+    const alteracoes = []
+    for (const campo of campos) {
+      const anterior = String(selecionado[campo] ?? '')
+      const novo = String(formEdicaoComp[campo] ?? '')
+      if (anterior !== novo) alteracoes.push({ campo, valor_anterior: anterior, valor_novo: novo })
+    }
+    if (alteracoes.length === 0) { setEditandoComp(false); return }
+    const patch = {}
+    for (const a of alteracoes) patch[a.campo] = formEdicaoComp[a.campo]
+    await fetch(`${URL}/rest/v1/pedidos_cotacao?id=eq.${selecionado.id}`, {
+      method: 'PATCH',
+      headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch)
+    })
+    for (const a of alteracoes) {
+      await fetch(`${URL}/rest/v1/pedidos_cotacao_log`, {
+        method: 'POST',
+        headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pedido_id: selecionado.id, editado_por: emailLogado, campo: a.campo, valor_anterior: a.valor_anterior, valor_novo: a.valor_novo })
+      })
+    }
+    setEditandoComp(false)
+    const log = await fetchSupabase('pedidos_cotacao_log', `?pedido_id=eq.${selecionado.id}&order=editado_em.desc`)
+    setLogEdicaoComp(Array.isArray(log) ? log : [])
+    carregarPedidos()
+    setSelecionado(prev => ({ ...prev, ...patch }))
+  }
+
   async function abrirPedido(pedido) {
     setSelecionado(pedido)
     setHistorico([])
     setSugestoes([])
+    setEditandoComp(false)
+    setShowLogComp(false)
+    const log = await fetchSupabase('pedidos_cotacao_log', `?pedido_id=eq.${pedido.id}&order=editado_em.desc`)
+    setLogEdicaoComp(Array.isArray(log) ? log : [])
 
     const data = await fetchSupabase('respostas_cotacao', `?pedido_id=eq.${pedido.id}&order=preco_unitario.asc`)
     const resps = Array.isArray(data) ? data : []
@@ -454,19 +492,89 @@ export default function Comprador() {
         <button style={s.btnLink} onClick={() => { sessionStorage.removeItem('comprador_email'); setEmailLogado(null) }}>Sair</button>
       </header>
       <div style={s.content}>
+      <div style={s.content}>
         <div style={s.card}>
-          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
-            <span style={{ ...s.badge, ...(BADGE[selecionado.classe]||{}) }}>Classe {selecionado.classe}</span>
-            <span style={{ fontWeight:600, fontSize:16 }}>{selecionado.item_descricao}</span>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10, flex:1 }}>
+              <span style={{ ...s.badge, ...(BADGE[selecionado.classe]||{}) }}>Classe {selecionado.classe}</span>
+              <span style={{ fontWeight:600, fontSize:16 }}>{selecionado.item_descricao}</span>
+            </div>
+            <div style={{ display:'flex', gap:8, flexShrink:0 }}>
+              {logEdicaoComp.length > 0 && (
+                <button title="Ver histórico de edições" onClick={() => setShowLogComp(!showLogComp)}
+                  style={{ background:'none', border:'none', cursor:'pointer', fontSize:18, color:'#185FA5' }}>ⓘ</button>
+              )}
+              {!editandoComp
+                ? <button onClick={() => { setEditandoComp(true); setFormEdicaoComp({ item_descricao: selecionado.item_descricao, classe: selecionado.classe, quantidade: selecionado.quantidade, unidade: selecionado.unidade, filial: selecionado.filial, prazo_necessario: selecionado.prazo_necessario || '', observacoes: selecionado.observacoes || '' }) }}
+                    style={{ background:'none', border:'0.5px solid rgba(0,0,0,0.2)', borderRadius:7, padding:'5px 12px', fontSize:12, cursor:'pointer' }}>✏️ Editar</button>
+                : <div style={{ display:'flex', gap:6 }}>
+                    <button onClick={() => salvarEdicaoComp(selecionado)} style={{ background:'#1D9E75', color:'#fff', border:'none', borderRadius:7, padding:'5px 12px', fontSize:12, cursor:'pointer' }}>Salvar</button>
+                    <button onClick={() => setEditandoComp(false)} style={{ background:'none', border:'0.5px solid rgba(0,0,0,0.2)', borderRadius:7, padding:'5px 12px', fontSize:12, cursor:'pointer' }}>Cancelar</button>
+                  </div>
+              }
+            </div>
           </div>
-          <div style={s.metaGrid}>
-            <div><div style={s.metaLabel}>Quantidade</div><div style={s.metaVal}>{selecionado.quantidade} {selecionado.unidade}</div></div>
-            <div><div style={s.metaLabel}>Filial</div><div style={s.metaVal}>{selecionado.filial}</div></div>
-            {selecionado.numero_cotacao && <div><div style={s.metaLabel}>Nº Cotação</div><div style={s.metaVal}>#{selecionado.numero_cotacao}</div></div>}
-            <div><div style={s.metaLabel}>Lead time resposta</div><div style={s.metaVal}>{formatarLeadTime(leadtimes[selecionado.id])}</div></div>
-          </div>
-          {selecionado.observacoes && <div style={s.obs}>{selecionado.observacoes}</div>}
+
+          {showLogComp && logEdicaoComp.length > 0 && (
+            <div style={{ background:'#F1EFE8', borderRadius:8, padding:'10px 14px', marginBottom:12, fontSize:12 }}>
+              <div style={{ fontWeight:600, marginBottom:6 }}>Histórico de edições</div>
+              {logEdicaoComp.map((l,i) => (
+                <div key={i} style={{ borderBottom:'0.5px solid rgba(0,0,0,0.08)', paddingBottom:4, marginBottom:4 }}>
+                  <span style={{ color:'#888780' }}>{new Date(l.editado_em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})} · </span>
+                  <span style={{ fontWeight:500 }}>{l.editado_por}</span>
+                  <span style={{ color:'#888780' }}> alterou </span><span style={{ fontWeight:500 }}>{l.campo}</span>
+                  <span style={{ color:'#888780' }}> de </span><span style={{ textDecoration:'line-through', color:'#E24B4A' }}>{l.valor_anterior||'—'}</span>
+                  <span style={{ color:'#888780' }}> para </span><span style={{ color:'#1D9E75', fontWeight:500 }}>{l.valor_novo||'—'}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!editandoComp ? (
+            <>
+              <div style={s.metaGrid}>
+                <div><div style={s.metaLabel}>Vendedor</div><div style={s.metaVal}>{selecionado.usuarios?.nome || '—'}</div></div>
+                <div><div style={s.metaLabel}>Quantidade</div><div style={s.metaVal}>{selecionado.quantidade} {selecionado.unidade}</div></div>
+                <div><div style={s.metaLabel}>Filial</div><div style={s.metaVal}>{selecionado.filial}</div></div>
+                {selecionado.numero_cotacao && <div><div style={s.metaLabel}>Nº Cotação</div><div style={s.metaVal}>#{selecionado.numero_cotacao}</div></div>}
+                <div><div style={s.metaLabel}>Lead time resposta</div><div style={s.metaVal}>{formatarLeadTime(leadtimes[selecionado.id])}</div></div>
+              </div>
+              {selecionado.observacoes && <div style={s.obs}>{selecionado.observacoes}</div>}
+            </>
+          ) : (
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+              <div style={{ gridColumn:'1/-1' }}>
+                <label style={s.metaLabel}>Descrição</label>
+                <input style={{ width:'100%', padding:'8px 10px', border:'0.5px solid rgba(0,0,0,0.2)', borderRadius:7, fontSize:13, outline:'none', boxSizing:'border-box' }} value={formEdicaoComp.item_descricao||''} onChange={e => setFormEdicaoComp(f=>({...f,item_descricao:e.target.value}))} />
+              </div>
+              <div>
+                <label style={s.metaLabel}>Classe</label>
+                <select style={{ width:'100%', padding:'8px 10px', border:'0.5px solid rgba(0,0,0,0.2)', borderRadius:7, fontSize:13, outline:'none' }} value={formEdicaoComp.classe||''} onChange={e => setFormEdicaoComp(f=>({...f,classe:e.target.value}))}>
+                  <option value="A">A</option><option value="B">B</option><option value="C">C</option>
+                </select>
+              </div>
+              <div>
+                <label style={s.metaLabel}>Filial</label>
+                <select style={{ width:'100%', padding:'8px 10px', border:'0.5px solid rgba(0,0,0,0.2)', borderRadius:7, fontSize:13, outline:'none' }} value={formEdicaoComp.filial||''} onChange={e => setFormEdicaoComp(f=>({...f,filial:e.target.value}))}>
+                  <option>Curitiba</option><option>Cascavel</option>
+                </select>
+              </div>
+              <div>
+                <label style={s.metaLabel}>Quantidade</label>
+                <input type="number" style={{ width:'100%', padding:'8px 10px', border:'0.5px solid rgba(0,0,0,0.2)', borderRadius:7, fontSize:13, outline:'none' }} value={formEdicaoComp.quantidade||''} onChange={e => setFormEdicaoComp(f=>({...f,quantidade:e.target.value}))} />
+              </div>
+              <div>
+                <label style={s.metaLabel}>Prazo (dias)</label>
+                <input type="number" style={{ width:'100%', padding:'8px 10px', border:'0.5px solid rgba(0,0,0,0.2)', borderRadius:7, fontSize:13, outline:'none' }} value={formEdicaoComp.prazo_necessario||''} onChange={e => setFormEdicaoComp(f=>({...f,prazo_necessario:e.target.value}))} />
+              </div>
+              <div style={{ gridColumn:'1/-1' }}>
+                <label style={s.metaLabel}>Observações</label>
+                <input style={{ width:'100%', padding:'8px 10px', border:'0.5px solid rgba(0,0,0,0.2)', borderRadius:7, fontSize:13, outline:'none', boxSizing:'border-box' }} value={formEdicaoComp.observacoes||''} onChange={e => setFormEdicaoComp(f=>({...f,observacoes:e.target.value}))} />
+              </div>
+            </div>
+          )}
         </div>
+
 
         {/* Card de sugestões automáticas */}
         {(buscandoSugestoes || sugestoes.length > 0) && (
@@ -628,7 +736,7 @@ export default function Comprador() {
             <div style={s.sideSection}>BUSCA</div>
             <input
               style={{ width:'100%', padding:'8px 12px', border:'0.5px solid rgba(0,0,0,0.15)', borderRadius:8, fontSize:13, outline:'none', boxSizing:'border-box' }}
-              placeholder="🔍 Buscar item..."
+              placeholder="🔍 Buscar item, #número..."
               value={busca}
               onChange={e => setBusca(e.target.value)}
             />

@@ -89,6 +89,10 @@ export default function Vendedor() {
   const [fornecedores, setFornecedores] = useState([])
   const [pedidoAberto, setPedidoAberto] = useState(null)
   const [respostasPedido, setRespostasPedido] = useState([])
+  const [editando, setEditando] = useState(false)
+  const [formEdicao, setFormEdicao] = useState({})
+  const [logEdicao, setLogEdicao] = useState([])
+  const [showLog, setShowLog] = useState(false)
   const [buscaPedidos, setBuscaPedidos] = useState('')
   const [filtroPedidos, setFiltroPedidos] = useState('todos')
   const [filtroDestino, setFiltroDestino] = useState('todos')
@@ -103,14 +107,14 @@ export default function Vendedor() {
     const filtroUrl = verTodos
       ? '?order=criado_em.desc'
       : `?vendedor_id=eq.${usuario.id}&order=criado_em.desc`
-    const data = await fetchSupabase('pedidos_cotacao', filtroUrl)
+    const data = await fetchSupabase('pedidos_cotacao', filtroUrl + '&select=*,usuarios(nome)')
     const lista = Array.isArray(data) ? data : []
     setPedidos(lista)
     const precos = {}
     for (const p of lista.filter(p => p.status === 'respostas_recebidas')) {
-      const resps = await fetchSupabase('respostas_cotacao', `?pedido_id=eq.${p.id}&order=preco_unitario.asc&limit=1`)
+      const resps = await fetchSupabase('respostas_cotacao', `?pedido_id=eq.${p.id}&order=preco_unitario.asc&limit=1&select=*,fornecedores(nome)`)
       if (Array.isArray(resps) && resps.length > 0) {
-        precos[p.id] = { preco: resps[0].preco_unitario, prazo: resps[0].prazo_entrega_dias }
+        precos[p.id] = { preco: resps[0].preco_unitario, prazo: resps[0].prazo_entrega_dias, fornecedor: resps[0].fornecedores?.nome }
       }
     }
     setPrecosPedidos(precos)
@@ -118,20 +122,63 @@ export default function Vendedor() {
 
   async function abrirPedido(pedido) {
     setPedidoAberto(pedido)
-    const data = await fetchSupabase('respostas_cotacao', `?pedido_id=eq.${pedido.id}&order=preco_unitario.asc`)
+    setEditando(false)
+    setFormEdicao({})
+    setShowLog(false)
+    const data = await fetchSupabase('respostas_cotacao', `?pedido_id=eq.${pedido.id}&order=preco_unitario.asc&select=*,fornecedores(nome)`)
     setRespostasPedido(Array.isArray(data) ? data : [])
+    const log = await fetchSupabase('pedidos_cotacao_log', `?pedido_id=eq.${pedido.id}&order=editado_em.desc`)
+    setLogEdicao(Array.isArray(log) ? log : [])
+  }
+
+  async function salvarEdicao() {
+    const campos = ['item_descricao', 'classe', 'quantidade', 'unidade', 'filial', 'prazo_necessario', 'observacoes']
+    const alteracoes = []
+    for (const campo of campos) {
+      const anterior = String(pedidoAberto[campo] ?? '')
+      const novo = String(formEdicao[campo] ?? '')
+      if (anterior !== novo) alteracoes.push({ campo, valor_anterior: anterior, valor_novo: novo })
+    }
+    if (alteracoes.length === 0) { setEditando(false); return }
+
+    // Salvar edição no pedido
+    const { URL, KEY } = { URL: 'https://cilbkzvuvwjeqtdpxcbs.supabase.co', KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpbGJrenZ1dndqZXF0ZHB4Y2JzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1NzQwNTAsImV4cCI6MjA5MzE1MDA1MH0._bn3Je-gsu4Edc8SKr-fQBVW5dxCOIKn_zxqT61wq2M' }
+    const patch = {}
+    for (const a of alteracoes) patch[a.campo] = formEdicao[a.campo]
+
+    await fetch(`${URL}/rest/v1/pedidos_cotacao?id=eq.${pedidoAberto.id}`, {
+      method: 'PATCH',
+      headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+      body: JSON.stringify(patch)
+    })
+
+    // Salvar log
+    for (const a of alteracoes) {
+      await fetch(`${URL}/rest/v1/pedidos_cotacao_log`, {
+        method: 'POST',
+        headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pedido_id: pedidoAberto.id, editado_por: usuario.nome || usuario.email, campo: a.campo, valor_anterior: a.valor_anterior, valor_novo: a.valor_novo })
+      })
+    }
+
+    const atualizado = { ...pedidoAberto, ...patch }
+    setPedidoAberto(atualizado)
+    setEditando(false)
+    const log = await fetchSupabase('pedidos_cotacao_log', `?pedido_id=eq.${pedidoAberto.id}&order=editado_em.desc`)
+    setLogEdicao(Array.isArray(log) ? log : [])
+    carregarPedidos()
   }
 
   async function buscarItem(codigo) {
     if (!codigo || codigo.length < 3) return
     setBuscando(true)
     const data = await fetchSupabase('itens', `?codigo=eq.${codigo.trim()}&select=*`)
-    console.log('resultado busca:', data)
     if (Array.isArray(data) && data.length > 0) {
       const item = data[0]
       setForm(f => ({ ...f, item_codigo: item.codigo, item_descricao: item.descricao, classe: item.classe, unidade: item.unidade || 'kg' }))
     } else {
-      alert('Item não encontrado: ' + codigo)
+      // Item não cadastrado — mantém o código e permite preencher descrição manualmente
+      setForm(f => ({ ...f, item_codigo: codigo.trim() }))
     }
     setBuscando(false)
   }
@@ -189,6 +236,39 @@ export default function Vendedor() {
     setResultado(null)
     setFornecedores([])
   }
+
+  // Agrupa pedidos por numero_cotacao (Item 1)
+  const pedidosAgrupados = React.useMemo(() => {
+    const filtrados = pedidos.filter(p => {
+      if (filtroPedidos === 'aguardando' && p.status !== 'aberto') return false
+      if (filtroPedidos === 'respondidos' && p.status !== 'respostas_recebidas') return false
+      if (filtroDestino !== 'todos' && p.destino !== filtroDestino) return false
+      if (filtroClassePedidos !== 'todos' && p.classe !== filtroClassePedidos) return false
+      if (buscaPedidos) {
+        const b = buscaPedidos.toLowerCase()
+        if (!p.item_descricao?.toLowerCase().includes(b) &&
+            !p.item_codigo?.includes(buscaPedidos) &&
+            !String(p.numero_pedido??'').includes(b.replace('#','')) &&
+            !String(p.numero_cotacao??'').includes(b.replace('#',''))) return false
+      }
+      return true
+    })
+    // Agrupar por numero_cotacao
+    const grupos = []
+    const vistos = new Set()
+    for (const p of filtrados) {
+      if (p.numero_cotacao) {
+        if (!vistos.has(p.numero_cotacao)) {
+          vistos.add(p.numero_cotacao)
+          const itens = filtrados.filter(x => x.numero_cotacao === p.numero_cotacao)
+          grupos.push({ tipo: 'grupo', numero_cotacao: p.numero_cotacao, itens, id: 'g_' + p.numero_cotacao })
+        }
+      } else {
+        grupos.push({ tipo: 'pedido', ...p, itens: [p] })
+      }
+    }
+    return grupos
+  }, [pedidos, filtroPedidos, filtroDestino, filtroClassePedidos, buscaPedidos])
 
   const pedidosFiltrados = pedidos.filter(p => {
     if (filtroPedidos !== 'todos' && p.status !== filtroPedidos) return false
@@ -263,6 +343,30 @@ export default function Vendedor() {
                 </div>
               )}
 
+              {form.item_codigo && !form.item_descricao && (
+                <div style={{ marginBottom: 12, padding: '10px 14px', background: '#FEF3C7', border: '0.5px solid #F59E0B', borderRadius: 8 }}>
+                  <div style={{ fontSize: 12, color: '#633806', marginBottom: 6 }}>⚠ Item não encontrado no cadastro — preencha a descrição manualmente:</div>
+                  <div style={s.row}>
+                    <div style={{ ...s.field, flex: 2 }}>
+                      <label style={s.label}>Descrição do item</label>
+                      <input style={s.input} value={form.item_descricao}
+                        onChange={e => setForm(f => ({ ...f, item_descricao: e.target.value }))}
+                        placeholder="Ex: PERFIL I A572 GR50 W610 x 113,0 x 6MTS" required />
+                    </div>
+                    <div style={s.field}>
+                      <label style={s.label}>Classe</label>
+                      <select style={s.input} value={form.classe}
+                        onChange={e => setForm(f => ({ ...f, classe: e.target.value }))}>
+                        <option value="">Selecione</option>
+                        <option value="A">A</option>
+                        <option value="B">B</option>
+                        <option value="C">C</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div style={s.row}>
                 <div style={s.field}>
                   <label style={s.label}>Quantidade</label>
@@ -290,7 +394,7 @@ export default function Vendedor() {
                   onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))} placeholder="Especificações adicionais..." />
               </div>
 
-              <button style={s.btnPrimary} type="submit" disabled={enviando || !form.item_codigo || !form.quantidade}>
+              <button style={s.btnPrimary} type="submit" disabled={enviando || !form.item_codigo || !form.item_descricao || !form.quantidade}>
                 {enviando ? 'Enviando...' : 'Abrir pedido'}
               </button>
             </form>
@@ -397,9 +501,40 @@ export default function Vendedor() {
                 </span>
               </div>
 
-              {pedidosFiltrados.length === 0
+              {pedidosAgrupados.length === 0
                 ? <div style={s.empty}>Nenhum pedido encontrado.</div>
-                : pedidosFiltrados.map(p => {
+                : pedidosAgrupados.map(grupo => {
+                    if (grupo.tipo === 'grupo') {
+                      const temRespostas = grupo.itens.some(p => p.status === 'respostas_recebidas')
+                      return (
+                        <div key={grupo.id} style={{ background:'#fff', borderRadius:10, border:'1.5px solid #185FA5', padding:'1rem', marginBottom:8 }}>
+                          <div style={{ display:'flex', gap:6, marginBottom:8, alignItems:'center' }}>
+                            <span style={{ ...s.badge, background:'#185FA5', color:'#fff' }}>ORC #{grupo.numero_cotacao}</span>
+                            <span style={{ fontSize:12, color:'#888780' }}>{grupo.itens.length} itens</span>
+                            {temRespostas && <span style={{ ...s.badge, background:'#FAEEDA', color:'#633806' }}>● Respondido</span>}
+                          </div>
+                          {grupo.itens.map(p => {
+                            const melhorPreco = precosPedidos[p.id]
+                            return (
+                              <div key={p.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 0', borderTop:'0.5px solid rgba(0,0,0,0.06)', cursor:'pointer' }} onClick={() => abrirPedido(p)}>
+                                <div style={{ flex:1 }}>
+                                  <div style={{ display:'flex', gap:4, marginBottom:3, flexWrap:'wrap' }}>
+                                    {p.numero_pedido && <span style={{ ...s.badge, background:'#1D9E75', color:'#fff' }}>#{p.numero_pedido}</span>}
+                                    <span style={{ ...s.badge, ...(BADGE[p.classe]||{}) }}>Classe {p.classe}</span>
+                                    <span style={{ ...s.badge, background: p.destino==='comprador'?'#E6F1FB':'#FAEEDA', color: p.destino==='comprador'?'#0C447C':'#633806' }}>{p.destino==='comprador'?'Comprador':'Vendedor'}</span>
+                                  </div>
+                                  <div style={{ fontWeight:500, fontSize:14 }}>{p.item_descricao}</div>
+                                  <div style={{ fontSize:11, color:'#888780' }}>{p.quantidade} {p.unidade} · {p.filial}</div>
+                                </div>
+                                {melhorPreco && <div style={{ textAlign:'right', flexShrink:0 }}><div style={{ fontSize:15, fontWeight:700, color:'#1D9E75' }}>R$ {parseFloat(melhorPreco.preco).toFixed(2)}</div></div>}
+                                <div style={{ fontSize:16, color:'#888780' }}>›</div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    }
+                    const p = grupo
                     const melhorPreco = precosPedidos[p.id]
                     return (
                       <div key={p.id} style={{ background:'#fff', borderRadius:10, border: p.status==='respostas_recebidas' ? '1.5px solid #EF9F27' : '0.5px solid rgba(0,0,0,0.1)', padding:'1rem', marginBottom:8, cursor:'pointer', display:'flex', alignItems:'center', gap:12 }} onClick={() => abrirPedido(p)}>
@@ -410,17 +545,18 @@ export default function Vendedor() {
                             <span style={{ ...s.badge, background: p.destino==='comprador' ? '#E6F1FB' : '#FAEEDA', color: p.destino==='comprador' ? '#0C447C' : '#633806' }}>
                               {p.destino==='comprador' ? 'Comprador' : 'Vendedor'}
                             </span>
-                            {p.numero_cotacao && <span style={{ ...s.badge, background:'#F1EFE8', color:'#444441' }}>ORC #{p.numero_cotacao}</span>}
                             {p.status==='respostas_recebidas' && <span style={{ ...s.badge, background:'#FAEEDA', color:'#633806' }}>● Respondido</span>}
                           </div>
                           <div style={{ fontWeight:500, fontSize:15, marginBottom:3 }}>{p.item_descricao}</div>
                           <div style={{ fontSize:12, color:'#888780' }}>
+                            {p.usuarios?.nome && <span style={{ fontWeight:500, color:'#444441' }}>{p.usuarios.nome} · </span>}
                             {p.quantidade} {p.unidade} · {p.filial} · {new Date(p.criado_em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}
                           </div>
                         </div>
                         {melhorPreco && (
                           <div style={{ textAlign:'right', flexShrink:0 }}>
                             <div style={{ fontSize:10, color:'#888780', marginBottom:2 }}>melhor preço</div>
+                            {melhorPreco.fornecedor && <div style={{ fontSize:12, fontWeight:600, color:'#444441', marginBottom:2 }}>{melhorPreco.fornecedor}</div>}
                             <div style={{ fontSize:18, fontWeight:700, color:'#1D9E75' }}>R$ {parseFloat(melhorPreco.preco).toFixed(2)}<span style={{ fontSize:11, color:'#888780', fontWeight:400 }}>/kg</span></div>
                             {melhorPreco.prazo && <div style={{ fontSize:11, color:'#888780' }}>prazo: {melhorPreco.prazo} dias</div>}
                           </div>
@@ -438,16 +574,86 @@ export default function Vendedor() {
           <div>
             <button style={{ ...s.btnSec, marginBottom: 16 }} onClick={() => setPedidoAberto(null)}>← Voltar</button>
             <div style={s.card}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                <span style={{ ...s.badge, ...(BADGE[pedidoAberto.classe] || {}) }}>Classe {pedidoAberto.classe}</span>
-                <span style={{ fontWeight: 600, fontSize: 16 }}>{pedidoAberto.item_descricao}</span>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:10, flex:1 }}>
+                  <span style={{ ...s.badge, ...(BADGE[pedidoAberto.classe]||{}) }}>Classe {pedidoAberto.classe}</span>
+                  <span style={{ fontWeight:600, fontSize:16 }}>{pedidoAberto.item_descricao}</span>
+                </div>
+                <div style={{ display:'flex', gap:8, flexShrink:0 }}>
+                  {logEdicao.length > 0 && (
+                    <button title="Ver histórico de edições" onClick={() => setShowLog(!showLog)}
+                      style={{ background:'none', border:'none', cursor:'pointer', fontSize:18, color:'#185FA5' }}>ⓘ</button>
+                  )}
+                  {!editando
+                    ? <button onClick={() => { setEditando(true); setFormEdicao({ item_descricao: pedidoAberto.item_descricao, classe: pedidoAberto.classe, quantidade: pedidoAberto.quantidade, unidade: pedidoAberto.unidade, filial: pedidoAberto.filial, prazo_necessario: pedidoAberto.prazo_necessario || '', observacoes: pedidoAberto.observacoes || '' }) }}
+                        style={{ ...s.btnSec, fontSize:12, padding:'5px 12px' }}>✏️ Editar</button>
+                    : <div style={{ display:'flex', gap:6 }}>
+                        <button onClick={salvarEdicao} style={{ ...s.btnPrimary, fontSize:12, padding:'5px 12px' }}>Salvar</button>
+                        <button onClick={() => setEditando(false)} style={{ ...s.btnSec, fontSize:12, padding:'5px 12px' }}>Cancelar</button>
+                      </div>
+                  }
+                </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
-                <div><div style={{ fontSize: 11, color: '#888780', textTransform: 'uppercase' }}>Quantidade</div><div style={{ fontWeight: 500 }}>{pedidoAberto.quantidade} {pedidoAberto.unidade}</div></div>
-                <div><div style={{ fontSize: 11, color: '#888780', textTransform: 'uppercase' }}>Filial</div><div style={{ fontWeight: 500 }}>{pedidoAberto.filial}</div></div>
-                <div><div style={{ fontSize: 11, color: '#888780', textTransform: 'uppercase' }}>Prazo necessário</div><div style={{ fontWeight: 500 }}>{pedidoAberto.prazo_necessario || '—'} dias</div></div>
-                <div><div style={{ fontSize: 11, color: '#888780', textTransform: 'uppercase' }}>Status</div><div style={{ fontWeight: 500, color: pedidoAberto.status === 'aprovado' ? '#085041' : '#444441' }}>{pedidoAberto.status === 'aprovado' ? '✓ Aprovado' : pedidoAberto.status === 'respostas_recebidas' ? 'Respondido' : 'Em aberto'}</div></div>
-              </div>
+
+              {showLog && logEdicao.length > 0 && (
+                <div style={{ background:'#F1EFE8', borderRadius:8, padding:'10px 14px', marginBottom:12, fontSize:12 }}>
+                  <div style={{ fontWeight:600, marginBottom:6, color:'#444441' }}>Histórico de edições</div>
+                  {logEdicao.map((l,i) => (
+                    <div key={i} style={{ borderBottom:'0.5px solid rgba(0,0,0,0.08)', paddingBottom:4, marginBottom:4 }}>
+                      <span style={{ color:'#888780' }}>{new Date(l.editado_em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})} · </span>
+                      <span style={{ fontWeight:500 }}>{l.editado_por}</span>
+                      <span style={{ color:'#888780' }}> alterou </span>
+                      <span style={{ fontWeight:500 }}>{l.campo}</span>
+                      <span style={{ color:'#888780' }}> de </span>
+                      <span style={{ textDecoration:'line-through', color:'#E24B4A' }}>{l.valor_anterior || '—'}</span>
+                      <span style={{ color:'#888780' }}> para </span>
+                      <span style={{ color:'#1D9E75', fontWeight:500 }}>{l.valor_novo || '—'}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {!editando ? (
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
+                  <div><div style={{ fontSize:11, color:'#888780', textTransform:'uppercase' }}>Vendedor</div><div style={{ fontWeight:500 }}>{pedidoAberto.usuarios?.nome || '—'}</div></div>
+                  <div><div style={{ fontSize:11, color:'#888780', textTransform:'uppercase' }}>Filial</div><div style={{ fontWeight:500 }}>{pedidoAberto.filial}</div></div>
+                  <div><div style={{ fontSize:11, color:'#888780', textTransform:'uppercase' }}>Quantidade</div><div style={{ fontWeight:500 }}>{pedidoAberto.quantidade} {pedidoAberto.unidade}</div></div>
+                  <div><div style={{ fontSize:11, color:'#888780', textTransform:'uppercase' }}>Prazo necessário</div><div style={{ fontWeight:500 }}>{pedidoAberto.prazo_necessario || '—'} dias</div></div>
+                  <div><div style={{ fontSize:11, color:'#888780', textTransform:'uppercase' }}>Status</div><div style={{ fontWeight:500 }}>{pedidoAberto.status==='aprovado' ? '✓ Aprovado' : pedidoAberto.status==='respostas_recebidas' ? 'Respondido' : 'Em aberto'}</div></div>
+                  {pedidoAberto.observacoes && <div style={{ gridColumn:'1/-1' }}><div style={{ fontSize:11, color:'#888780', textTransform:'uppercase' }}>Observações</div><div style={{ fontWeight:500 }}>{pedidoAberto.observacoes}</div></div>}
+                </div>
+              ) : (
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
+                  <div style={{ gridColumn:'1/-1' }}>
+                    <label style={s.label}>Descrição</label>
+                    <input style={s.input} value={formEdicao.item_descricao||''} onChange={e => setFormEdicao(f=>({...f,item_descricao:e.target.value}))} />
+                  </div>
+                  <div>
+                    <label style={s.label}>Classe</label>
+                    <select style={s.input} value={formEdicao.classe||''} onChange={e => setFormEdicao(f=>({...f,classe:e.target.value}))}>
+                      <option value="A">A</option><option value="B">B</option><option value="C">C</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={s.label}>Filial</label>
+                    <select style={s.input} value={formEdicao.filial||''} onChange={e => setFormEdicao(f=>({...f,filial:e.target.value}))}>
+                      <option>Curitiba</option><option>Cascavel</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={s.label}>Quantidade</label>
+                    <input style={s.input} type="number" value={formEdicao.quantidade||''} onChange={e => setFormEdicao(f=>({...f,quantidade:e.target.value}))} />
+                  </div>
+                  <div>
+                    <label style={s.label}>Prazo (dias)</label>
+                    <input style={s.input} type="number" value={formEdicao.prazo_necessario||''} onChange={e => setFormEdicao(f=>({...f,prazo_necessario:e.target.value}))} />
+                  </div>
+                  <div style={{ gridColumn:'1/-1' }}>
+                    <label style={s.label}>Observações</label>
+                    <input style={s.input} value={formEdicao.observacoes||''} onChange={e => setFormEdicao(f=>({...f,observacoes:e.target.value}))} />
+                  </div>
+                </div>
+              )}
             </div>
 
             {respostasPedido.length > 0 ? (
@@ -460,6 +666,7 @@ export default function Vendedor() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
                         {r.aprovada && <div style={{ display: 'inline-block', background: '#1D9E75', color: '#fff', fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 4, marginBottom: 4 }}>✓ Aprovado pelo comprador</div>}
+                        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 2 }}>{r.fornecedores?.nome || '—'}</div>
                         <div style={{ fontWeight: 500, fontSize: 15 }}>R$ {parseFloat(r.preco_unitario).toFixed(2)}/kg</div>
                         <div style={{ fontSize: 12, color: '#888780', marginTop: 2 }}>
                           Prazo: {r.prazo_entrega_dias || '—'} dias
