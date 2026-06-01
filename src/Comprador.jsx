@@ -492,7 +492,6 @@ export default function Comprador() {
         <button style={s.btnLink} onClick={() => { sessionStorage.removeItem('comprador_email'); setEmailLogado(null) }}>Sair</button>
       </header>
       <div style={s.content}>
-      <div style={s.content}>
         <div style={s.card}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
             <div style={{ display:'flex', alignItems:'center', gap:10, flex:1 }}>
