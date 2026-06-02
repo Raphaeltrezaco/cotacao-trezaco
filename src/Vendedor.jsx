@@ -82,7 +82,9 @@ export default function Vendedor() {
   const [tab, setTab] = useState('novo')
   const [pedidos, setPedidos] = useState([])
   const [verTodos, setVerTodos] = useState(false)
-  const [form, setForm] = useState({ numero_cotacao: '', item_codigo: '', item_descricao: '', classe: '', quantidade: '', unidade: 'kg', filial: 'Curitiba', prazo_necessario: '', observacoes: '' })
+  const [numeroCotacao, setNumeroCotacao] = useState('')
+  const [itensCarrinho, setItensCarrinho] = useState([])
+  const [form, setForm] = useState({ item_codigo: '', item_descricao: '', classe: '', quantidade: '', unidade: 'kg', filial: 'Curitiba', prazo_necessario: '', observacoes: '' })
   const [buscando, setBuscando] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [resultado, setResultado] = useState(null)
@@ -183,41 +185,57 @@ export default function Vendedor() {
     setBuscando(false)
   }
 
+  function adicionarAoCarrinho() {
+    if (!form.item_descricao || !form.quantidade) { alert('Preencha o item e a quantidade'); return }
+    setItensCarrinho(prev => [...prev, { ...form, id: Date.now() }])
+    setForm({ item_codigo: '', item_descricao: '', classe: '', quantidade: '', unidade: 'kg', filial: form.filial, prazo_necessario: '', observacoes: '' })
+  }
+
+  function removerDoCarrinho(id) {
+    setItensCarrinho(prev => prev.filter(i => i.id !== id))
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!form.classe) { alert('Busque o item primeiro'); return }
+    const todosItens = itensCarrinho.length > 0 
+      ? [...itensCarrinho, ...(form.item_descricao && form.quantidade ? [form] : [])]
+      : [form]
+    if (todosItens.length === 0 || !todosItens[0].item_descricao) { alert('Adicione pelo menos um item'); return }
+    if (!todosItens[0].classe) { alert('Busque o item primeiro'); return }
     setEnviando(true)
     setResultado(null)
-
-    const payload = {
-      numero_cotacao: form.numero_cotacao || null,
-      item_codigo: form.item_codigo,
-      item_descricao: form.item_descricao,
-      classe: form.classe,
-      quantidade: parseFloat(form.quantidade),
-      unidade: form.unidade,
-      filial: form.filial,
-      prazo_necessario: parseInt(form.prazo_necessario) || null,
-      observacoes: form.observacoes,
-      vendedor_id: usuario.id,
+    let ultimoPedido = null
+    for (const item of todosItens) {
+      const payload = {
+        numero_cotacao: numeroCotacao || null,
+        item_codigo: item.item_codigo,
+        item_descricao: item.item_descricao,
+        classe: item.classe,
+        quantidade: parseFloat(item.quantidade),
+        unidade: item.unidade,
+        filial: item.filial,
+        prazo_necessario: parseInt(item.prazo_necessario) || null,
+        observacoes: item.observacoes,
+        vendedor_id: usuario.id,
+      }
+      const data = await postSupabase('pedidos_cotacao', payload)
+      if (Array.isArray(data) && data.length > 0) ultimoPedido = data[0]
     }
-
-    const data = await postSupabase('pedidos_cotacao', payload)
-    console.log('pedido criado:', data)
-
-    if (Array.isArray(data) && data.length > 0) {
-      const pedido = data[0]
-      if (pedido.destino === 'vendedor') {
-        const forn = await fetchSupabase('item_fornecedor', `?item_codigo=eq.${form.item_codigo}&select=*,fornecedores(*)`)
+    if (ultimoPedido) {
+      if (ultimoPedido.destino === 'vendedor') {
+        const forn = await fetchSupabase('item_fornecedor', `?item_codigo=eq.${todosItens[0].item_codigo}&select=*,fornecedores(*)`)
         setFornecedores(Array.isArray(forn) ? forn.map(f => f.fornecedores).filter(Boolean) : [])
       }
-      setResultado(pedido)
+      setResultado(ultimoPedido)
+      setItensCarrinho([])
       carregarPedidos()
     } else {
-      alert('Erro ao salvar: ' + JSON.stringify(data))
+      alert('Erro ao salvar pedido')
     }
     setEnviando(false)
   }
+
+
 
   function gerarWhatsApp(fornecedor) {
     const msg = encodeURIComponent(
@@ -232,7 +250,9 @@ export default function Vendedor() {
   }
 
   function novoForm() {
-    setForm({ numero_cotacao: '', item_codigo: '', item_descricao: '', classe: '', quantidade: '', unidade: 'kg', filial: 'Curitiba', prazo_necessario: '', observacoes: '' })
+    setNumeroCotacao('')
+    setItensCarrinho([])
+    setForm({ item_codigo: '', item_descricao: '', classe: '', quantidade: '', unidade: 'kg', filial: 'Curitiba', prazo_necessario: '', observacoes: '' })
     setResultado(null)
     setFornecedores([])
   }
@@ -315,11 +335,27 @@ export default function Vendedor() {
             <h2 style={s.cardTitle}>Novo pedido de cotação</h2>
             <form onSubmit={handleSubmit} style={s.form}>
               <div style={s.field}>
-                <label style={s.label}>Número do Orçamento</label>
-                <input style={s.input} value={form.numero_cotacao}
-                  onChange={e => setForm(f => ({ ...f, numero_cotacao: e.target.value }))}
+                <label style={s.label}>Número do Orçamento <span style={{ color:'#888780', fontWeight:400 }}>(opcional — para agrupar itens)</span></label>
+                <input style={s.input} value={numeroCotacao}
+                  onChange={e => setNumeroCotacao(e.target.value)}
                   placeholder="ex: 172580" />
               </div>
+
+              {/* Lista de itens já adicionados */}
+              {itensCarrinho.length > 0 && (
+                <div style={{ marginBottom:12 }}>
+                  <div style={{ fontSize:12, fontWeight:600, color:'#888780', textTransform:'uppercase', marginBottom:6 }}>Itens adicionados ({itensCarrinho.length})</div>
+                  {itensCarrinho.map(item => (
+                    <div key={item.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 12px', background:'#E1F5EE', borderRadius:8, marginBottom:6 }}>
+                      <span style={{ ...s.badge, ...BADGE[item.classe] }}>Classe {item.classe}</span>
+                      <span style={{ flex:1, fontSize:13, fontWeight:500 }}>{item.item_descricao}</span>
+                      <span style={{ fontSize:12, color:'#5F5E5A' }}>{item.quantidade} {item.unidade}</span>
+                      <button type="button" onClick={() => removerDoCarrinho(item.id)}
+                        style={{ background:'none', border:'none', color:'#E24B4A', cursor:'pointer', fontSize:16, padding:'0 4px' }}>×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <div style={s.field}>
                 <label style={s.label}>Código do item</label>
@@ -394,9 +430,20 @@ export default function Vendedor() {
                   onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))} placeholder="Especificações adicionais..." />
               </div>
 
-              <button style={s.btnPrimary} type="submit" disabled={enviando || !form.item_codigo || !form.item_descricao || !form.quantidade}>
-                {enviando ? 'Enviando...' : 'Abrir pedido'}
-              </button>
+              <div style={{ display:'flex', gap:8 }}>
+                {/* Botão adicionar mais um item */}
+                <button type="button"
+                  onClick={adicionarAoCarrinho}
+                  disabled={!form.item_descricao || !form.quantidade}
+                  style={{ ...s.btnSec, flex:1, opacity: (!form.item_descricao || !form.quantidade) ? 0.5 : 1 }}>
+                  + Adicionar outro item
+                </button>
+                {/* Botão enviar tudo */}
+                <button style={{ ...s.btnPrimary, flex:1 }} type="submit"
+                  disabled={enviando || (!form.item_descricao && itensCarrinho.length === 0) || (!form.quantidade && itensCarrinho.length === 0)}>
+                  {enviando ? 'Enviando...' : itensCarrinho.length > 0 ? `Abrir cotação (${itensCarrinho.length + (form.item_descricao ? 1 : 0)} itens)` : 'Abrir pedido'}
+                </button>
+              </div>
             </form>
           </div>
         )}
