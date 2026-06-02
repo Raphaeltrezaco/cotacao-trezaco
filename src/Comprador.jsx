@@ -128,6 +128,8 @@ export default function Comprador() {
   const [buscandoSugestoes, setBuscandoSugestoes] = useState(false)
   const [fornecedoresMap, setFornecedoresMap] = useState({})
   const [novaResposta, setNovaResposta] = useState({ fornecedor_nome:'', preco_unitario:'', prazo_entrega_dias:'', observacoes:'' })
+  const [editandoResposta, setEditandoResposta] = useState(null) // id da resposta sendo editada
+  const [formEditResposta, setFormEditResposta] = useState({})
   const [salvando, setSalvando] = useState(false)
   const [filtro, setFiltro] = useState('todos')
   const [busca, setBusca] = useState('')
@@ -446,6 +448,37 @@ export default function Comprador() {
     setBuscandoSugestoes(false)
   }
 
+  async function salvarEdicaoResposta(r) {
+    const patch = {
+      preco_unitario: parseFloat(formEditResposta.preco_unitario) || r.preco_unitario,
+      prazo_entrega_dias: parseInt(formEditResposta.prazo_entrega_dias) || r.prazo_entrega_dias,
+      observacoes: formEditResposta.observacoes ?? r.observacoes,
+    }
+    await fetch(`${URL}/rest/v1/respostas_cotacao?id=eq.${r.id}`, {
+      method: 'PATCH',
+      headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch)
+    })
+    // Log da edição
+    const campos = ['preco_unitario', 'prazo_entrega_dias', 'observacoes']
+    for (const campo of campos) {
+      const anterior = String(r[campo] ?? '')
+      const novo = String(patch[campo] ?? '')
+      if (anterior !== novo) {
+        await fetch(`${URL}/rest/v1/pedidos_cotacao_log`, {
+          method: 'POST',
+          headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pedido_id: selecionado.id, editado_por: emailLogado, campo: `resposta_${campo}`, valor_anterior: anterior, valor_novo: novo })
+        })
+      }
+    }
+    setEditandoResposta(null)
+    const data = await fetchSupabase('respostas_cotacao', `?pedido_id=eq.${selecionado.id}&order=preco_unitario.asc`)
+    setRespostas(Array.isArray(data) ? data : [])
+    const log = await fetchSupabase('pedidos_cotacao_log', `?pedido_id=eq.${selecionado.id}&order=editado_em.desc`)
+    setLogEdicaoComp(Array.isArray(log) ? log : [])
+  }
+
   async function salvarResposta(e) {
     e.preventDefault()
     setSalvando(true)
@@ -683,13 +716,53 @@ export default function Comprador() {
             <h3 style={s.sectionTitle}>Mapa comparativo — {respostas.length} {respostas.length===1?'resposta':'respostas'}</h3>
             {respostas.map(r => (
               <div key={r.id} style={{ ...s.respostaCard, ...(parseFloat(r.preco_unitario)===menorPreco?s.melhor:{}) }}>
-                <div style={{ flex:1 }}>
-                  {parseFloat(r.preco_unitario)===menorPreco && <span style={s.melhorBadge}>⭐ Melhor preço</span>}
-                  <div style={{ fontWeight:500, fontSize:15 }}>{fornecedoresMap[r.fornecedor_id]||'—'}</div>
-                  <div style={{ fontSize:12, color:'#888780', marginTop:2 }}>Prazo: {r.prazo_entrega_dias||'—'} dias{r.observacoes&&` · ${r.observacoes}`}</div>
-                  <div style={{ fontSize:13, color:'#5F5E5A', marginTop:4 }}>Total: <strong>R$ {(parseFloat(r.preco_unitario)*parseFloat(selecionado.quantidade)).toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></div>
-                </div>
-                <div style={{ fontSize:22, fontWeight:700 }}>R$ {parseFloat(r.preco_unitario).toFixed(2)}<span style={{ fontSize:12, color:'#888780', fontWeight:400 }}>/kg</span></div>
+                {editandoResposta === r.id ? (
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontWeight:600, fontSize:14, marginBottom:8 }}>{fornecedoresMap[r.fornecedor_id]||'—'}</div>
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
+                      <div>
+                        <div style={{ fontSize:11, color:'#888780', marginBottom:3 }}>PREÇO (R$/kg)</div>
+                        <input type="number" step="0.01"
+                          style={{ width:'100%', padding:'6px 8px', border:'0.5px solid rgba(0,0,0,0.2)', borderRadius:6, fontSize:13, outline:'none', boxSizing:'border-box' }}
+                          value={formEditResposta.preco_unitario ?? r.preco_unitario}
+                          onChange={e => setFormEditResposta(f => ({...f, preco_unitario: e.target.value}))} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize:11, color:'#888780', marginBottom:3 }}>PRAZO (dias)</div>
+                        <input type="number"
+                          style={{ width:'100%', padding:'6px 8px', border:'0.5px solid rgba(0,0,0,0.2)', borderRadius:6, fontSize:13, outline:'none', boxSizing:'border-box' }}
+                          value={formEditResposta.prazo_entrega_dias ?? r.prazo_entrega_dias ?? ''}
+                          onChange={e => setFormEditResposta(f => ({...f, prazo_entrega_dias: e.target.value}))} />
+                      </div>
+                    </div>
+                    <div style={{ marginBottom:8 }}>
+                      <div style={{ fontSize:11, color:'#888780', marginBottom:3 }}>OBSERVAÇÕES</div>
+                      <input style={{ width:'100%', padding:'6px 8px', border:'0.5px solid rgba(0,0,0,0.2)', borderRadius:6, fontSize:13, outline:'none', boxSizing:'border-box' }}
+                        value={formEditResposta.observacoes ?? r.observacoes ?? ''}
+                        onChange={e => setFormEditResposta(f => ({...f, observacoes: e.target.value}))} />
+                    </div>
+                    <div style={{ display:'flex', gap:6 }}>
+                      <button onClick={() => salvarEdicaoResposta(r)}
+                        style={{ background:'#1D9E75', color:'#fff', border:'none', borderRadius:6, padding:'5px 12px', fontSize:12, cursor:'pointer' }}>Salvar</button>
+                      <button onClick={() => setEditandoResposta(null)}
+                        style={{ background:'none', border:'0.5px solid rgba(0,0,0,0.2)', borderRadius:6, padding:'5px 12px', fontSize:12, cursor:'pointer' }}>Cancelar</button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ flex:1 }}>
+                      {parseFloat(r.preco_unitario)===menorPreco && <span style={s.melhorBadge}>⭐ Melhor preço</span>}
+                      <div style={{ fontWeight:500, fontSize:15 }}>{fornecedoresMap[r.fornecedor_id]||'—'}</div>
+                      <div style={{ fontSize:12, color:'#888780', marginTop:2 }}>Prazo: {r.prazo_entrega_dias||'—'} dias{r.observacoes&&` · ${r.observacoes}`}</div>
+                      <div style={{ fontSize:13, color:'#5F5E5A', marginTop:4 }}>Total: <strong>R$ {(parseFloat(r.preco_unitario)*parseFloat(selecionado.quantidade)).toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></div>
+                    </div>
+                    <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:6 }}>
+                      <div style={{ fontSize:22, fontWeight:700 }}>R$ {parseFloat(r.preco_unitario).toFixed(2)}<span style={{ fontSize:12, color:'#888780', fontWeight:400 }}>/kg</span></div>
+                      <button onClick={() => { setEditandoResposta(r.id); setFormEditResposta({ preco_unitario: r.preco_unitario, prazo_entrega_dias: r.prazo_entrega_dias, observacoes: r.observacoes }) }}
+                        style={{ background:'none', border:'0.5px solid rgba(0,0,0,0.15)', borderRadius:6, padding:'3px 10px', fontSize:11, cursor:'pointer', color:'#5F5E5A' }}>✏️ Editar</button>
+                    </div>
+                  </>
+                )}
               </div>
             ))}
           </div>
