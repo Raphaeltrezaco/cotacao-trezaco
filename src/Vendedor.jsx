@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fetchSupabase, postSupabase } from './supabase'
 
@@ -238,7 +238,7 @@ export default function Vendedor() {
   }
 
   // Agrupa pedidos por numero_cotacao (Item 1)
-  const pedidosAgrupados = React.useMemo(() => {
+  const pedidosAgrupados = useMemo(() => {
     const filtrados = pedidos.filter(p => {
       if (filtroPedidos === 'aguardando' && p.status !== 'aberto') return false
       if (filtroPedidos === 'respondidos' && p.status !== 'respostas_recebidas') return false
