@@ -107,7 +107,7 @@ export default function Vendedor() {
     const filtroUrl = verTodos
       ? '?order=criado_em.desc'
       : `?vendedor_id=eq.${usuario.id}&order=criado_em.desc`
-    const data = await fetchSupabase('pedidos_cotacao', filtroUrl + '&select=*,usuarios(nome)')
+    const data = await fetchSupabase('pedidos_cotacao', filtroUrl + '&select=*,usuarios!pedidos_cotacao_vendedor_id_fkey(nome)')
     const lista = Array.isArray(data) ? data : []
     setPedidos(lista)
     const precos = {}

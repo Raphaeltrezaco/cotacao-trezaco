@@ -139,7 +139,7 @@ export default function Comprador() {
   if (!emailLogado) return <LoginComprador onLogin={setEmailLogado} />
 
   async function carregarPedidos() {
-    const data = await fetchSupabase('pedidos_cotacao', '?order=criado_em.desc&select=*,usuarios(nome)')
+    const data = await fetchSupabase('pedidos_cotacao', '?order=criado_em.desc&select=*,usuarios!pedidos_cotacao_vendedor_id_fkey(nome)')
     const pedidosList = Array.isArray(data) ? data : []
     setPedidos(pedidosList)
     const ltMap = {}
