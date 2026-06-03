@@ -5,7 +5,7 @@ const URL = 'https://cilbkzvuvwjeqtdpxcbs.supabase.co'
 const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpbGJrenZ1dndqZXF0ZHB4Y2JzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1NzQwNTAsImV4cCI6MjA5MzE1MDA1MH0._bn3Je-gsu4Edc8SKr-fQBVW5dxCOIKn_zxqT61wq2M'
 const EMAILS_ADMIN = ['compras@trezaco.com.br', 'raphael@trezaco.com.br', 'brandao@trezaco.com.br']
 
-// Lista fixa de fornecedores de estoque — ordem de exibição na tela
+// Lista fixa de fornecedores de estoque \u2014 ordem de exibi\u00e7\u00e3o na tela
 const FORNECEDORES_PADRAO = [
   { nome: 'Marcegaglia',     formatos: 'XLSX' },
   { nome: 'Soufer',          formatos: 'HTM (15 arquivos SAP)' },
@@ -63,23 +63,23 @@ async function carregarXLSX() {
   })
 }
 
-// ── PARSERS ─────────────────────────────────────────────────
+// \u2500\u2500 PARSERS \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
-// Marcegaglia: XLS/XLSX — Item, Descrição (pode ser VLOOKUP), Material, Tipo, Espessura, Quant.
+// Marcegaglia: XLS/XLSX \u2014 Item, Descri\u00e7\u00e3o (pode ser VLOOKUP), Material, Tipo, Espessura, Quant.
 async function parsearMarcegaglia(file, fornecedor) {
   const XLSX = await carregarXLSX()
   const buf = await lerArquivoComoArrayBuffer(file)
-  // cellFormula:false faz SheetJS retornar o valor calculado da fórmula (ex: VLOOKUP)
+  // cellFormula:false faz SheetJS retornar o valor calculado da f\u00f3rmula (ex: VLOOKUP)
   const wb = XLSX.read(buf, { type: 'array', cellFormula: false, cellText: false })
   const ws = wb.Sheets[wb.SheetNames[0]]
   const rows = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false })
   const hoje = new Date().toISOString().split('T')[0]
   return rows.map(row => {
-    // Busca coluna Descrição por várias grafias (encoding pode variar)
+    // Busca coluna Descri\u00e7\u00e3o por v\u00e1rias grafias (encoding pode variar)
     const descKey = Object.keys(row).find(k => k.toLowerCase().replace(/[^a-z]/g,'').startsWith('descri'))
     const desc = String(row[descKey] || row['Description'] || '').trim()
     const descLimpa = desc.replace(/\u0000/g, '').replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '').trim()
-    // Busca coluna Quantidade por várias grafias
+    // Busca coluna Quantidade por v\u00e1rias grafias
     const qtdKey = Object.keys(row).find(k => k.toLowerCase().replace(/[^a-z]/g,'').startsWith('quant'))
     const qtd = parseFloat(String(row[qtdKey] || '0').replace(',', '.')) || 0
     if (!descLimpa || descLimpa.length < 3) return null
@@ -99,7 +99,7 @@ async function parsearMarcegaglia(file, fornecedor) {
   }).filter(Boolean)
 }
 
-// Meincol: XLSX — Descrição | Preço (sem quantidade — importa com qtd=1 para aparecer no match)
+// Meincol: XLSX \u2014 Descri\u00e7\u00e3o | Pre\u00e7o (sem quantidade \u2014 importa com qtd=1 para aparecer no match)
 async function parsearMeincol(file, fornecedor) {
   const XLSX = await carregarXLSX()
   const buf = await lerArquivoComoArrayBuffer(file)
@@ -145,7 +145,7 @@ async function parsearTuper(file, fornecedor) {
 }
 }
 
-// Itaúna/Cariacica: XLSX — CODIGO, DESCRICAO, SALDO (toneladas)
+// Ita\u00fana/Cariacica: XLSX \u2014 CODIGO, DESCRICAO, SALDO (toneladas)
 async function parsearItauna(file, fornecedor) {
   const XLSX = await carregarXLSX()
   const buf = await lerArquivoComoArrayBuffer(file)
@@ -256,14 +256,14 @@ async function parsearPDF(file, fornecedor) {
     const tc = await page.getTextContent()
     const H = viewport.height
 
-    // Agrupa tokens por linha (Y similar, tolerÂ¢ncia 3px)
+    // Agrupa tokens por linha (Y similar, toler\u00c2\u00a2ncia 3px)
     const tokensPorLinha = {}
     for (const item of tc.items) {
       const txt = item.str.replace(/ /g, '').trim()
       if (!txt) continue
       const y = Math.round(H - item.transform[5])
       const x = Math.round(item.transform[4])
-      const yKey = Math.round(y / 3) * 3  // agrupa Y com tolerÂ¢ncia 3px
+      const yKey = Math.round(y / 3) * 3  // agrupa Y com toler\u00c2\u00a2ncia 3px
       if (!tokensPorLinha[yKey]) tokensPorLinha[yKey] = []
       tokensPorLinha[yKey].push({ txt, x })
     }
@@ -273,13 +273,13 @@ async function parsearPDF(file, fornecedor) {
       const tokens = tokensPorLinha[yKey].sort((a, b) => a.x - b.x).map(t => t.txt)
       if (tokens.length < 3) continue
 
-      // Último token = quantidade
+      // \u00daltimo token = quantidade
       const ultimo = tokens[tokens.length - 1]
       if (!/^\d[\d.,]*$/.test(ultimo)) continue
       const qtd = parseFloat(ultimo.replace(/\./g, '').replace(',', '.'))
       if (isNaN(qtd) || qtd <= 0 || qtd > 9999999) continue
 
-      // Detecta se primeiro token é código (Acofergo) ou parte da descrição (Perfipar/Sigma)
+      // Detecta se primeiro token \u00e9 c\u00f3digo (Acofergo) ou parte da descri\u00e7\u00e3o (Perfipar/Sigma)
       const primeiroToken = tokens[0]
       const temCodigo = /^[A-Za-z0-9]{5,}$/.test(primeiroToken)
         && !IGNORAR.test(primeiroToken)
@@ -299,7 +299,7 @@ async function parsearPDF(file, fornecedor) {
       if (/^[\d\/\-\.\s,]+$/.test(desc)) continue
       if (IGNORAR.test(desc)) continue
 
-      // Perfipar/Sigma: qtd em toneladas (ex: 7,8 → 7800 kg). Heurística: valor < 500 = toneladas
+      // Perfipar/Sigma: qtd em toneladas (ex: 7,8 \u2192 7800 kg). Heur\u00edstica: valor < 500 = toneladas
       const qtdFinal = qtd < 500 ? qtd * 1000 : qtd
 
       itens.push({ fornecedor_nome: fornecedor, item_codigo: codigo, item_descricao: desc, material: null, tipo_material: null, espessura: null, quantidade: qtdFinal, data_referencia: hoje })
@@ -308,7 +308,7 @@ async function parsearPDF(file, fornecedor) {
   return itens
 }
 
-// Trezaço Posição de Estoque PDF — Código | Descrição | ... | Estoque Pes (última coluna)
+// Treza\u00e7o Posi\u00e7\u00e3o de Estoque PDF \u2014 C\u00f3digo | Descri\u00e7\u00e3o | ... | Estoque Pes (\u00faltima coluna)
 async function carregarPDFJS() {
   if (window.pdfjsLib) return window.pdfjsLib
   return new Promise((resolve, reject) => {
@@ -345,7 +345,7 @@ async function parsearPosEstoque(file, filial) {
       if (mf) filialDetectada = mf[1]
     }
 
-    // Coleta tokens com posição
+    // Coleta tokens com posi\u00e7\u00e3o
     const tokens = tc.items
       .filter(i => i.str.trim())
       .map(i => ({
@@ -354,30 +354,30 @@ async function parsearPosEstoque(file, filial) {
         y: Math.round(H - i.transform[5])
       }))
 
-    // Encontra linhas de dados: tokens que são código de 8 dígitos
+    // Encontra linhas de dados: tokens que s\u00e3o c\u00f3digo de 8 d\u00edgitos
     const codigos = tokens.filter(t => /^\d{8}$/.test(t.str))
 
-    // Detecta X das colunas a partir da linha de cabeçalho
-    // Cabeçalho tem "Descrição" — usa o X desse token como Â¢ncora da col descrição
-    const tokDesc = tokens.find(t => t.str === 'Descrição')
-    const tokEst = tokens.find(t => t.str === 'Estoque' && tokens.find(t2 => t2.str === 'Segurança' && Math.abs(t2.y - t.y) < 20))
-    // X da coluna Estoque (não Estoque Segurança)
-    // No PDF: Estoque Segurança aparece antes de Estoque
-    // Pega o segundo "Estoque" do cabeçalho
+    // Detecta X das colunas a partir da linha de cabe\u00e7alho
+    // Cabe\u00e7alho tem "Descri\u00e7\u00e3o" \u2014 usa o X desse token como \u00c2\u00a2ncora da col descri\u00e7\u00e3o
+    const tokDesc = tokens.find(t => t.str === 'Descri\u00e7\u00e3o')
+    const tokEst = tokens.find(t => t.str === 'Estoque' && tokens.find(t2 => t2.str === 'Seguran\u00e7a' && Math.abs(t2.y - t.y) < 20))
+    // X da coluna Estoque (n\u00e3o Estoque Seguran\u00e7a)
+    // No PDF: Estoque Seguran\u00e7a aparece antes de Estoque
+    // Pega o segundo "Estoque" do cabe\u00e7alho
     const tokEstAll = tokens.filter(t => t.str === 'Estoque')
 
     for (const tkCod of codigos) {
       const yCod = tkCod.y
-      // Tokens na mesma linha (Â±4px de Y)
+      // Tokens na mesma linha (\u00c2\u00b14px de Y)
       const linha = tokens.filter(t => Math.abs(t.y - yCod) < 4).sort((a, b) => a.x - b.x)
       if (linha.length < 4) continue
 
-      // Código = primeiro token (já sabemos)
-      // Descrição = tokens entre o código (x~30-250) e Refer.1 (x~280)
-      // Detecta X do código
+      // C\u00f3digo = primeiro token (j\u00e1 sabemos)
+      // Descri\u00e7\u00e3o = tokens entre o c\u00f3digo (x~30-250) e Refer.1 (x~280)
+      // Detecta X do c\u00f3digo
       const xCod = tkCod.x
 
-      // Todos os tokens numéricos no formato brasileiro da linha
+      // Todos os tokens num\u00e9ricos no formato brasileiro da linha
       const nums = linha
         .map(t => t.str)
         .filter(s => /^\d{1,3}(?:\.\d{3})*,\d+$/.test(s))
@@ -385,14 +385,14 @@ async function parsearPosEstoque(file, filial) {
         .filter(n => n > 0)
 
       if (nums.length === 0) continue
-      // Estoque = 2º número >= 1º (Estoque >= Estoque Segurança normalmente)
-      // Mas mais simples: pegar o maior número da linha (é o Peso ou Estoque)
-      // Segundo número da esquerda = Estoque (após Estoque Segurança)
+      // Estoque = 2\u00ba n\u00famero >= 1\u00ba (Estoque >= Estoque Seguran\u00e7a normalmente)
+      // Mas mais simples: pegar o maior n\u00famero da linha (\u00e9 o Peso ou Estoque)
+      // Segundo n\u00famero da esquerda = Estoque (ap\u00f3s Estoque Seguran\u00e7a)
       const qtd = nums.length >= 2 ? nums[1] : nums[0]
       if (!qtd || qtd <= 0) continue
 
-      // Descrição: tokens entre código e o token de classe (A/B/C/AA/BB)
-      // Filtra tokens Â  direita do código e antes dos números
+      // Descri\u00e7\u00e3o: tokens entre c\u00f3digo e o token de classe (A/B/C/AA/BB)
+      // Filtra tokens \u00c2\u00a0 direita do c\u00f3digo e antes dos n\u00fameros
       const descTokens = linha.filter(t =>
         t.x > xCod + 5 &&
         !/^(AA|BB|A|B|C)$/.test(t.str) &&
@@ -413,8 +413,8 @@ async function parsearPosEstoque(file, filial) {
   }
   return itens
 }
-// Detecção automática de formato
-// Usiminas: XLSX — DESPRODUTO = "TBC 100x100x2,00LQx6000 BC"
+// Detec\u00e7\u00e3o autom\u00e1tica de formato
+// Usiminas: XLSX \u2014 DESPRODUTO = "TBC 100x100x2,00LQx6000 BC"
 async function parsearUsiminas(file, fornecedor) {
   const XLSX = await carregarXLSX()
   const buf = await lerArquivoComoArrayBuffer(file)
@@ -424,9 +424,9 @@ async function parsearUsiminas(file, fornecedor) {
   const hoje = new Date().toISOString().split('T')[0]
   return rows.map(row => {
     const desc = String(row['DESPRODUTO'] || row['Descricao'] || '').trim()
-    const qtdTon = parseFloat(String(row['Estoque Disponível (tn)'] || row['Estoque Disponivel (tn)'] || row['ESTOQUE'] || 0).replace(',', '.')) || 0
+    const qtdTon = parseFloat(String(row['Estoque Dispon\u00edvel (tn)'] || row['Estoque Disponivel (tn)'] || row['ESTOQUE'] || 0).replace(',', '.')) || 0
     if (!desc || qtdTon === 0) return null
-    // Normaliza: TBC 100x100x2,00LQx6000 → remove sufixos "LQ", "BC", etc.
+    // Normaliza: TBC 100x100x2,00LQx6000 \u2192 remove sufixos "LQ", "BC", etc.
     const descLimpa = desc.replace(/LQ[x\d]*/gi, 'x').replace(/\s+(BC|RIR|CIV\d+)\s*/gi, '').replace(/x+/g, 'x').trim()
     return {
       fornecedor_nome: fornecedor,
@@ -441,20 +441,20 @@ async function parsearUsiminas(file, fornecedor) {
   }).filter(Boolean)
 }
 
-// Tuberfil: XLSX — Descrição = "PE100x100x3,00x6600A PRETO CIV300" / "PL30x30x3,00x6000"
+// Tuberfil: XLSX \u2014 Descri\u00e7\u00e3o = "PE100x100x3,00x6600A PRETO CIV300" / "PL30x30x3,00x6000"
 async function parsearTuberfil(file, fornecedor) {
   const XLSX = await carregarXLSX()
   const buf = await lerArquivoComoArrayBuffer(file)
   const wb = XLSX.read(buf, { type: 'array', cellFormula: false, cellText: false })
   const ws = wb.Sheets[wb.SheetNames[0]]
-  // Header na linha 1 (índice 1)
+  // Header na linha 1 (\u00edndice 1)
   const rows = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false, range: 1 })
   const hoje = new Date().toISOString().split('T')[0]
   return rows.map(row => {
-    const desc = String(row['Descrição'] || row['Descricao'] || row['DESCRIÇÂO'] || '').trim()
+    const desc = String(row['Descri\u00e7\u00e3o'] || row['Descricao'] || row['DESCRI\u00c7\u00c2O'] || '').trim()
     const qtdTon = parseFloat(String(row['Qtde'] || row['Quantidade'] || row['QTDE'] || 0).replace(',', '.')) || 0
     if (!desc || qtdTon === 0) return null
-    // Normaliza PE/PL prefix: PE100x100x3,00 → TUBO 100x100x3,00 (mantém PE pra o tipo inferer)
+    // Normaliza PE/PL prefix: PE100x100x3,00 \u2192 TUBO 100x100x3,00 (mant\u00e9m PE pra o tipo inferer)
     return {
       fornecedor_nome: fornecedor,
       item_codigo: String(row['Material'] || row['Codigo'] || '').trim() || null,
@@ -468,12 +468,12 @@ async function parsearTuberfil(file, fornecedor) {
   }).filter(Boolean)
 }
 
-// Cosmetal: PDF — categorias em polegadas, estoque em toneladas
-// O parsearPDF genérico já funciona para Cosmetal (código alfanum + desc + qtd inteira)
-// Mas a quantidade está em toneladas (valor pequeno). Sobrescreve multiplicando por 1000.
+// Cosmetal: PDF \u2014 categorias em polegadas, estoque em toneladas
+// O parsearPDF gen\u00e9rico j\u00e1 funciona para Cosmetal (c\u00f3digo alfanum + desc + qtd inteira)
+// Mas a quantidade est\u00e1 em toneladas (valor pequeno). Sobrescreve multiplicando por 1000.
 async function parsearCosmetal(file, fornecedor) {
   const itens = await parsearPDF(file, fornecedor)
-  // Quantidades do Cosmetal são em toneladas (ex: 35, 52) — converte para kg
+  // Quantidades do Cosmetal s\u00e3o em toneladas (ex: 35, 52) \u2014 converte para kg
   return itens.map(item => ({ ...item, quantidade: item.quantidade * 1000 }))
 }
 
@@ -517,28 +517,28 @@ async function parsearEstoque(file, fornecedor) {
     const nk2 = k => k.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z]/gi,'').toLowerCase()
     if (cols.some(c => nk2(c) === 'quantidadekg')) return parsearTuper(file, fornecedor)
 
-    // Simec Itaúna/Cariacica: tem coluna SALDO
+    // Simec Ita\u00fana/Cariacica: tem coluna SALDO
     if (cols.some(c => c.includes('saldo'))) return parsearItauna(file, fornecedor)
 
-    // Tuberfil: tem coluna Material + Descrição + Qtde (header na linha 1)
-    // Detecta pelo nome do fornecedor ou pela estrutura (códigos começam com PE/PL/MP)
+    // Tuberfil: tem coluna Material + Descri\u00e7\u00e3o + Qtde (header na linha 1)
+    // Detecta pelo nome do fornecedor ou pela estrutura (c\u00f3digos come\u00e7am com PE/PL/MP)
     if (fornecedor === 'Tuberfil' || firstVals.includes('estoque dpac') || cols.some(c => c.includes('qtde') && c !== 'quantidade')) {
       return parsearTuberfil(file, fornecedor)
     }
 
-    // Meincol: só tem Descrição e Valor/Preço, sem Item/Quantidade
+    // Meincol: s\u00f3 tem Descri\u00e7\u00e3o e Valor/Pre\u00e7o, sem Item/Quantidade
     if (cols.length <= 3 && cols.some(c => c.includes('descri')) && !cols.some(c => c.includes('item') || c.includes('quant'))) {
       return parsearMeincol(file, fornecedor)
     }
 
-    // Fallback: Marcegaglia (Item, Descrição, Material, Espessura, Quant.)
+    // Fallback: Marcegaglia (Item, Descri\u00e7\u00e3o, Material, Espessura, Quant.)
     return parsearMarcegaglia(file, fornecedor)
   }
 
   return []
 }
 
-// Parser tabela de preços
+// Parser tabela de pre\u00e7os
 async function parsearPrecos(file) {
   const XLSX = await carregarXLSX()
   const buf = await lerArquivoComoArrayBuffer(file)
@@ -565,7 +565,7 @@ async function parsearPrecos(file) {
       if (!row || row.every(c => c === null)) continue
       if (row[0] && String(row[0]).trim().length > 2 && !String(row[0]).trim().match(/^\d/)) familiaAtual = String(row[0]).trim()
       const desc = String(row[1] || '').trim()
-      if (!desc || desc.toLowerCase().includes('família') || desc.toLowerCase().includes('espessura')) continue
+      if (!desc || desc.toLowerCase().includes('fam\u00edlia') || desc.toLowerCase().includes('espessura')) continue
       const precoCTBA = colCuritiba !== null ? parseFloat(String(row[colCuritiba] || '').replace(',', '.')) : null
       const precoCAS = colCascavel !== null ? parseFloat(String(row[colCascavel] || '').replace(',', '.')) : (apenasUmPreco ? precoCTBA : null)
       if (!precoCTBA || isNaN(precoCTBA)) continue
@@ -579,7 +579,7 @@ export default function Admin() {
   const [email, setEmail] = useState('')
   const [logado, setLogado] = useState(() => sessionStorage.getItem('admin_email') || null)
   const [erroLogin, setErroLogin] = useState('')
-  // Estado de importação por fornecedor (chave = nome do fornecedor)
+  // Estado de importa\u00e7\u00e3o por fornecedor (chave = nome do fornecedor)
   const [importacoes, setImportacoes] = useState({})
   const [arqPrecos, setArqPrecos] = useState(null)
   const [arqPosEstoque, setArqPosEstoque] = useState([])
@@ -623,7 +623,7 @@ export default function Admin() {
       for (const arquivo of arqPosEstoque) {
         const itens = await parsearPosEstoque(arquivo, null)
         if (itens.length === 0) {
-          alert(`⚠️ "${arquivo.name}" — nenhum item reconhecido. Verifique se é o PDF "Posição de Estoque" do ERP.`)
+          alert(`\u26a0\ufe0f "${arquivo.name}" \u2014 nenhum item reconhecido. Verifique se \u00e9 o PDF "Posi\u00e7\u00e3o de Estoque" do ERP.`)
           continue
         }
         // Apaga estoque do dia para essa filial antes de reimportar
@@ -637,7 +637,7 @@ export default function Admin() {
       }
       setArqPosEstoque([])
       carregarStats()
-      if (totalItens > 0) alert(`✅ Estoque interno importado: ${totalItens.toLocaleString('pt-BR')} itens`)
+      if (totalItens > 0) alert(`\u2705 Estoque interno importado: ${totalItens.toLocaleString('pt-BR')} itens`)
     } catch (err) { alert('Erro: ' + err.message) }
     setProcessando(null)
   }
@@ -647,7 +647,7 @@ export default function Admin() {
     if (EMAILS_ADMIN.includes(email.trim().toLowerCase())) {
       sessionStorage.setItem('admin_email', email.trim().toLowerCase())
       setLogado(email.trim().toLowerCase())
-    } else setErroLogin('E-mail não autorizado.')
+    } else setErroLogin('E-mail n\u00e3o autorizado.')
   }
 
   function setImportacao(nome, campos) {
@@ -665,7 +665,7 @@ export default function Admin() {
       const avisos = []
       for (const arquivo of arquivos) {
         const itens = await parsearEstoque(arquivo, nome)
-        if (itens.length === 0) avisos.push(`⚠️ "${arquivo.name}" — nenhum item reconhecido.`)
+        if (itens.length === 0) avisos.push(`\u26a0\ufe0f "${arquivo.name}" \u2014 nenhum item reconhecido.`)
         await insertLotes('estoque_fornecedor', itens)
         totalItens += itens.length
       }
@@ -680,7 +680,7 @@ export default function Admin() {
   }
 
   async function importarPrecos() {
-    if (!arqPrecos) { alert('Selecione o arquivo de preços'); return }
+    if (!arqPrecos) { alert('Selecione o arquivo de pre\u00e7os'); return }
     setProcessando('precos')
     try {
       const itens = await parsearPrecos(arqPrecos)
@@ -690,7 +690,7 @@ export default function Admin() {
       await insertLotes('tabela_precos_fornecedor', itens)
       setArqPrecos(null)
       carregarStats()
-      alert(`✅ Preços importados: ${itens.length} itens de ${fors.join(', ')}`)
+      alert(`\u2705 Pre\u00e7os importados: ${itens.length} itens de ${fors.join(', ')}`)
     } catch (err) { alert('Erro: ' + err.message) }
     setProcessando(null)
   }
@@ -699,8 +699,8 @@ export default function Admin() {
     <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#f8f8f6' }}>
       <div style={{ background:'#fff', borderRadius:16, border:'0.5px solid rgba(0,0,0,0.1)', padding:'2.5rem', width:'100%', maxWidth:380 }}>
         <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:'2rem' }}>
-          <div style={{ width:44, height:44, borderRadius:10, background:'#185FA5', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, fontWeight:700 }}>⚙</div>
-          <div><div style={{ fontSize:18, fontWeight:600 }}>Trezaço</div><div style={{ fontSize:12, color:'#888780' }}>Admin — Upload de Planilhas</div></div>
+          <div style={{ width:44, height:44, borderRadius:10, background:'#185FA5', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, fontWeight:700 }}>\u2699</div>
+          <div><div style={{ fontSize:18, fontWeight:600 }}>Treza\u00e7o</div><div style={{ fontSize:12, color:'#888780' }}>Admin \u2014 Upload de Planilhas</div></div>
         </div>
         <form onSubmit={handleLogin} style={{ display:'flex', flexDirection:'column', gap:16 }}>
           <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
@@ -719,8 +719,8 @@ export default function Admin() {
     <div style={{ minHeight:'100vh', background:'#f8f8f6' }}>
       <header style={{ background:'#fff', borderBottom:'0.5px solid rgba(0,0,0,0.1)', padding:'12px 24px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-          <div style={{ width:36, height:36, borderRadius:8, background:'#185FA5', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700 }}>⚙</div>
-          <div><div style={{ fontWeight:600, fontSize:15 }}>Trezaço</div><div style={{ fontSize:12, color:'#888780' }}>Admin — {logado}</div></div>
+          <div style={{ width:36, height:36, borderRadius:8, background:'#185FA5', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700 }}>\u2699</div>
+          <div><div style={{ fontWeight:600, fontSize:15 }}>Treza\u00e7o</div><div style={{ fontSize:12, color:'#888780' }}>Admin \u2014 {logado}</div></div>
         </div>
         <button style={{ fontSize:13, color:'#888780', background:'none', border:'0.5px solid rgba(0,0,0,0.15)', borderRadius:6, padding:'6px 12px', cursor:'pointer' }}
           onClick={() => { sessionStorage.removeItem('admin_email'); setLogado(null) }}>Sair</button>
@@ -734,7 +734,7 @@ export default function Admin() {
           </div>
           <div style={{ background:'#fff', borderRadius:10, border:'0.5px solid rgba(0,0,0,0.1)', padding:'1rem', textAlign:'center', borderLeft:'3px solid #185FA5' }}>
             <div style={{ fontSize:24, fontWeight:700, color:'#185FA5' }}>{stats.precos}</div>
-            <div style={{ fontSize:12, color:'#888780', marginTop:4 }}>Itens de preço</div>
+            <div style={{ fontSize:12, color:'#888780', marginTop:4 }}>Itens de pre\u00e7o</div>
           </div>
           <div style={{ background:'#fff', borderRadius:10, border:'0.5px solid rgba(0,0,0,0.1)', padding:'1rem', borderLeft:'3px solid #EF9F27', gridColumn:'1 / -1' }}>
             <div style={{ fontSize:11, fontWeight:700, color:'#888780', letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:10 }}>Fornecedores com estoque importado</div>
@@ -744,11 +744,11 @@ export default function Admin() {
                   {Object.entries(stats.fornecedores || {}).sort((a,b) => a[0].localeCompare(b[0])).map(([nome, data]) => {
                     const hoje = new Date().toISOString().split('T')[0]
                     const isHoje = data === hoje
-                    const dataFmt = data ? new Date(data + 'T12:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' }) : '—'
+                    const dataFmt = data ? new Date(data + 'T12:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' }) : '\u2014'
                     return (
                       <div key={nome} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 12px', borderRadius:8, background: isHoje ? '#E1F5EE' : '#FEF3C7', border: `0.5px solid ${isHoje ? '#1D9E75' : '#F59E0B'}` }}>
                         <span style={{ fontSize:13, fontWeight:600, color: isHoje ? '#085041' : '#633806' }}>{nome}</span>
-                        <span style={{ fontSize:11, color: isHoje ? '#1D9E75' : '#F59E0B', fontWeight:500 }}>{isHoje ? '✓ hoje' : dataFmt}</span>
+                        <span style={{ fontSize:11, color: isHoje ? '#1D9E75' : '#F59E0B', fontWeight:500 }}>{isHoje ? '\u2713 hoje' : dataFmt}</span>
                       </div>
                     )
                   })}
@@ -759,7 +759,7 @@ export default function Admin() {
 
         <div style={{ background:'#fff', borderRadius:12, border:'0.5px solid rgba(0,0,0,0.1)', padding:'1.5rem', marginBottom:16 }}>
           <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:16 }}>
-            <span style={{ fontSize:20 }}>ð¦</span>
+            <span style={{ fontSize:20 }}>\u00f0\u009f\u0093\u00a6</span>
             <div style={{ fontSize:15, fontWeight:600 }}>Planilhas de Estoque</div>
           </div>
 
@@ -773,16 +773,16 @@ export default function Admin() {
 
             return (
               <div key={nome} style={{ display:'grid', gridTemplateColumns:'160px 1fr auto', gap:12, alignItems:'center', padding:'10px 0', borderBottom:'0.5px solid rgba(0,0,0,0.06)' }}>
-                {/* Nome + última data */}
+                {/* Nome + \u00faltima data */}
                 <div>
                   <div style={{ fontWeight:600, fontSize:14 }}>{nome}</div>
                   <div style={{ fontSize:11, color:'#888780', marginTop:2 }}>{formatos}</div>
                   {dataFmt && (
                     <div style={{ marginTop:4, display:'inline-flex', alignItems:'center', gap:4, padding:'2px 7px', borderRadius:5, background: isHoje ? '#E1F5EE' : '#FEF3C7', border:`0.5px solid ${isHoje ? '#1D9E75' : '#F59E0B'}` }}>
-                      <span style={{ fontSize:10, fontWeight:600, color: isHoje ? '#085041' : '#633806' }}>{isHoje ? '✓ hoje' : dataFmt}</span>
+                      <span style={{ fontSize:10, fontWeight:600, color: isHoje ? '#085041' : '#633806' }}>{isHoje ? '\u2713 hoje' : dataFmt}</span>
                     </div>
                   )}
-                  {!dataFmt && <div style={{ marginTop:4, fontSize:10, color:'#E24B4A' }}>⚠ não importado</div>}
+                  {!dataFmt && <div style={{ marginTop:4, fontSize:10, color:'#E24B4A' }}>\u26a0 n\u00e3o importado</div>}
                 </div>
 
                 {/* Seletor de arquivo */}
@@ -797,14 +797,14 @@ export default function Admin() {
                   )}
                 </div>
 
-                {/* Botão importar + status */}
+                {/* Bot\u00e3o importar + status */}
                 <div style={{ display:'flex', alignItems:'center', gap:8, minWidth:100 }}>
                   {processandoEste
-                    ? <span style={{ fontSize:12, color:'#EF9F27' }}>⏳ Importando...</span>
+                    ? <span style={{ fontSize:12, color:'#EF9F27' }}>\u23f3 Importando...</span>
                     : imp.status === 'ok'
-                      ? <span style={{ fontSize:12, color:'#1D9E75' }}>✓ {imp.resultado?.toLocaleString('pt-BR')} itens</span>
+                      ? <span style={{ fontSize:12, color:'#1D9E75' }}>\u2713 {imp.resultado?.toLocaleString('pt-BR')} itens</span>
                       : imp.status === 'erro'
-                        ? <span style={{ fontSize:12, color:'#E24B4A' }} title={imp.erro}>✗ Erro</span>
+                        ? <span style={{ fontSize:12, color:'#E24B4A' }} title={imp.erro}>\u2717 Erro</span>
                         : (
                           <button
                             onClick={() => importarEstoque(nome, imp.arquivos)}
@@ -820,16 +820,16 @@ export default function Admin() {
           })}
         </div>
 
-        {/* Estoque Interno Trezaço */}
+        {/* Estoque Interno Treza\u00e7o */}
         <div style={{ background:'#fff', borderRadius:12, border:'0.5px solid rgba(0,0,0,0.1)', padding:'1.5rem', marginBottom:16 }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-              <span style={{ fontSize:20 }}>ð­</span>
-              <div style={{ fontSize:15, fontWeight:600 }}>Estoque Interno Trezaço</div>
+              <span style={{ fontSize:20 }}>\u00f0\u009f\u008f\u00ad</span>
+              <div style={{ fontSize:15, fontWeight:600 }}>Estoque Interno Treza\u00e7o</div>
             </div>
           </div>
           <div style={{ fontSize:12, color:'#888780', marginBottom:12, background:'#F1EFE8', borderRadius:8, padding:'8px 12px' }}>
-            PDF "Posição de Estoque" do ERP — uma filial por vez. A filial é detectada automaticamente do cabeçalho.
+            PDF "Posi\u00e7\u00e3o de Estoque" do ERP \u2014 uma filial por vez. A filial \u00e9 detectada automaticamente do cabe\u00e7alho.
           </div>
           <div style={{ display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
             <input type="file" accept=".pdf" multiple
@@ -837,18 +837,18 @@ export default function Admin() {
               onChange={e => setArqPosEstoque(Array.from(e.target.files))} />
             <button onClick={importarPosEstoque} disabled={!arqPosEstoque?.length || processando === 'pos_estoque'}
               style={{ background: (!arqPosEstoque?.length || processando === 'pos_estoque') ? '#E0DED8' : '#1D9E75', color:'#fff', border:'none', borderRadius:8, padding:'10px 18px', fontSize:14, fontWeight:500, cursor:'pointer', whiteSpace:'nowrap' }}>
-              {processando === 'pos_estoque' ? '⏳ Importando...' : 'ð¥ Importar estoque'}
+              {processando === 'pos_estoque' ? '\u23f3 Importando...' : '\u00f0\u009f\u0093\u00a5 Importar estoque'}
             </button>
           </div>
           {stats.posEstoque > 0 && (
-            <div style={{ fontSize:12, color:'#1D9E75', marginTop:8 }}>✓ {stats.posEstoque.toLocaleString('pt-BR')} itens no banco · filiais: {stats.posFiliais?.join(', ')}</div>
+            <div style={{ fontSize:12, color:'#1D9E75', marginTop:8 }}>\u2713 {stats.posEstoque.toLocaleString('pt-BR')} itens no banco \u00b7 filiais: {stats.posFiliais?.join(', ')}</div>
           )}
         </div>
 
         <div style={{ background:'#fff', borderRadius:12, border:'0.5px solid rgba(0,0,0,0.1)', padding:'1.5rem' }}>
           <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
-            <span style={{ fontSize:20 }}>ð°</span>
-            <div style={{ fontSize:15, fontWeight:600 }}>Tabela de Preços (todos os fornecedores)</div>
+            <span style={{ fontSize:20 }}>\u00f0\u009f\u0092\u00b0</span>
+            <div style={{ fontSize:15, fontWeight:600 }}>Tabela de Pre\u00e7os (todos os fornecedores)</div>
           </div>
           <div style={{ fontSize:12, color:'#888780', marginBottom:12, background:'#F1EFE8', borderRadius:8, padding:'8px 12px' }}>
             Uma aba por fornecedor: Marcegaglia, Tuper, Soufer, Sigma, Perfipar
@@ -858,7 +858,7 @@ export default function Admin() {
               onChange={e => setArqPrecos(e.target.files[0])} />
             <button onClick={importarPrecos} disabled={!arqPrecos || processando === 'precos'}
               style={{ background: (!arqPrecos || processando === 'precos') ? '#E0DED8' : '#185FA5', color:'#fff', border:'none', borderRadius:8, padding:'10px 18px', fontSize:14, fontWeight:500, cursor:'pointer', whiteSpace:'nowrap' }}>
-              {processando === 'precos' ? '⏳ Importando...' : 'ð¥ Importar preços'}
+              {processando === 'precos' ? '\u23f3 Importando...' : '\u00f0\u009f\u0093\u00a5 Importar pre\u00e7os'}
             </button>
           </div>
         </div>
