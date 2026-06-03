@@ -21,7 +21,7 @@ async function patchSupabase(tabela, filtro, body) {
   })
 }
 
-// Calcula minutos Ãºteis entre duas datas (seg-sex, 8h-18h)
+// Calcula minutos úteis entre duas datas (seg-sex, 8h-18h)
 function minutosUteis(inicio, fim) {
   if (!inicio || !fim) return null
   const start = new Date(inicio)
@@ -53,7 +53,7 @@ function minutosUteis(inicio, fim) {
 }
 
 function formatarLeadTime(min) {
-  if (min === null || min === undefined) return 'â'
+  if (min === null || min === undefined) return '—'
   if (min < 60) return `${min}min`
   const h = Math.floor(min / 60)
   const m = min % 60
@@ -69,7 +69,7 @@ function LoginComprador({ onLogin }) {
       sessionStorage.setItem('comprador_email', email.trim().toLowerCase())
       onLogin(email.trim().toLowerCase())
     } else {
-      setErro('E-mail nÃ£o autorizado para acessar o painel de compras.')
+      setErro('E-mail não autorizado para acessar o painel de compras.')
     }
   }
   return (
@@ -77,7 +77,7 @@ function LoginComprador({ onLogin }) {
       <div style={{ background:'#fff', borderRadius:16, border:'0.5px solid rgba(0,0,0,0.1)', padding:'2.5rem', width:'100%', maxWidth:380 }}>
         <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:'2rem' }}>
           <div style={{ width:44, height:44, borderRadius:10, background:'#1D9E75', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, fontWeight:700 }}>T</div>
-          <div><div style={{ fontSize:18, fontWeight:600 }}>TrezaÃ§o</div><div style={{ fontSize:12, color:'#888780' }}>Painel de Compras</div></div>
+          <div><div style={{ fontSize:18, fontWeight:600 }}>Trezaço</div><div style={{ fontSize:12, color:'#888780' }}>Painel de Compras</div></div>
         </div>
         <form onSubmit={handleSubmit} style={{ display:'flex', flexDirection:'column', gap:16 }}>
           <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
@@ -102,13 +102,13 @@ function PedidoCard({ p, onClick, leadtime }) {
           {p.numero_pedido && <span style={{ display:'inline-flex', alignItems:'center', padding:'3px 8px', borderRadius:5, fontSize:12, fontWeight:600, background:'#1D9E75', color:'#fff' }}>#{p.numero_pedido}</span>}
           {p.numero_cotacao && <span style={{ display:'inline-flex', alignItems:'center', padding:'3px 8px', borderRadius:5, fontSize:12, fontWeight:500, background:'#F1EFE8', color:'#444441' }}>ORC #{p.numero_cotacao}</span>}
           {leadtime !== null && leadtime !== undefined && (
-            <span style={{ display:'inline-flex', alignItems:'center', padding:'3px 8px', borderRadius:5, fontSize:12, fontWeight:500, background:'#E6F1FB', color:'#0C447C' }}>â± {formatarLeadTime(leadtime)}</span>
+            <span style={{ display:'inline-flex', alignItems:'center', padding:'3px 8px', borderRadius:5, fontSize:12, fontWeight:500, background:'#E6F1FB', color:'#0C447C' }}>⏱ {formatarLeadTime(leadtime)}</span>
           )}
         </div>
         <div style={{ fontWeight:500, fontSize:15, marginBottom:3 }}>{p.item_descricao}</div>
-        <div style={{ fontSize:12, color:'#888780' }}>{p.usuarios?.nome && <span style={{ fontWeight:500, color:'#444441' }}>{p.usuarios.nome} Â· </span>}{p.quantidade} {p.unidade} Â· {p.filial} Â· {new Date(p.criado_em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>
+        <div style={{ fontSize:12, color:'#888780' }}>{p.usuarios?.nome && <span style={{ fontWeight:500, color:'#444441' }}>{p.usuarios.nome} · </span>}{p.quantidade} {p.unidade} · {p.filial} · {new Date(p.criado_em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>
       </div>
-      <div style={{ fontSize:18, color:'#888780' }}>âº</div>
+      <div style={{ fontSize:18, color:'#888780' }}>º</div>
     </div>
   )
 }
@@ -206,10 +206,10 @@ export default function Comprador() {
     }
     setFornecedoresMap(mapa)
 
-    // Busca sugestÃµes de estoque + preÃ§o dos fornecedores
+    // Busca sugestÂµes de estoque + preço dos fornecedores
     buscarSugestoesFornecedor(pedido)
 
-    // Busca histÃ³rico de cotaÃ§Ãµes anteriores para o mesmo item (outros pedidos)
+    // Busca histórico de cotaçãµes anteriores para o mesmo item (outros pedidos)
     if (pedido.item_codigo) {
       const pedidosAnteriores = await fetchSupabase('pedidos_cotacao',
         `?item_codigo=eq.${pedido.item_codigo}&status=eq.respostas_recebidas&id=neq.${pedido.id}&order=criado_em.desc&limit=5`)
@@ -218,7 +218,7 @@ export default function Comprador() {
         for (const pa of pedidosAnteriores) {
           const respsAnt = await fetchSupabase('respostas_cotacao', `?pedido_id=eq.${pa.id}&order=preco_unitario.asc&limit=3`)
           if (Array.isArray(respsAnt) && respsAnt.length > 0) {
-            // Busca nomes dos fornecedores do histÃ³rico
+            // Busca nomes dos fornecedores do histórico
             for (const r of respsAnt) {
               if (r.fornecedor_id && !mapa[r.fornecedor_id]) {
                 const f = await fetchSupabase('fornecedores', `?id=eq.${r.fornecedor_id}&select=id,nome`)
@@ -261,14 +261,14 @@ export default function Comprador() {
       const desc = pedido.item_descricao.toUpperCase()
       const filial = pedido.filial
 
-      // Normaliza string: remove espaÃ§os e normaliza "1 1/4" â "1.1/4"
+      // Normaliza string: remove espaços e normaliza "1 1/4" → "1.1/4"
       function normalizar(s) {
         return s.toUpperCase().replace(/\s+/g, ' ').trim()
-          .replace(/(\d+) X (\d+\/\d+)/g, '$1X$2')       // "1 X 1/4" â "1X1/4"
-          .replace(/\b([1-9]) (\d+\/\d+)/g, '$1.$2')     // "1 1/4" â "1.1/4" (sÃ³ dÃ­gito Ãºnico)
+          .replace(/(\d+) X (\d+\/\d+)/g, '$1X$2')       // "1 X 1/4" → "1X1/4"
+          .replace(/\b([1-9]) (\d+\/\d+)/g, '$1.$2')     // "1 1/4" → "1.1/4" (só dígito único)
       }
 
-      // Extrai dimensÃµes convertendo polegadas para mm
+      // Extrai dimensÂµes convertendo polegadas para mm
       function extrairNumeros(s) {
         const POL = {
           '3/16':4.76,'1/4':6.35,'5/16':7.94,'3/8':9.52,'7/16':11.11,
@@ -426,13 +426,13 @@ export default function Comprador() {
         let score = 0
         let todasDimensoesBatem = false
 
-        // 1. Tipo deve bater â peso alto
+        // 1. Tipo deve bater — peso alto
         const tipoB = normalizarTipoCXS(B) || extrairTipo(B)
         if (tipoDesc === tipoB) score += 50
         else if (tipoDesc.split(' ')[0] === tipoB.split(' ')[0]) score += 20
         else return { score: 0, todasDimensoesBatem: false }
 
-        // 2. Compara nÃºmeros â cada nÃºmero em comum vale muito
+        // 2. Compara números — cada número em comum vale muito
         const numerosB = extrairNumeros(B)
         let numerosEmComum = 0
         let numerosTotal = numerosDesc.length
@@ -445,8 +445,8 @@ export default function Comprador() {
         if (numerosTotal > 0) {
           const pctMatch = numerosEmComum / numerosTotal
           score += Math.round(pctMatch * 50)
-          // Alta confianÃ§a: todas dimensÃµes principais do PEDIDO aparecem no item E
-          // todas dimensÃµes principais do ITEM aparecem no pedido (match bidirecional)
+          // Alta confiança: todas dimensÂµes principais do PEDIDO aparecem no item E
+          // todas dimensÂµes principais do ITEM aparecem no pedido (match bidirecional)
           const dimsPedido = numerosDesc.filter(n => n < 1000)
           const dimsItem = numerosB.filter(n => n < 1000)
           const pedidoBateItem = dimsPedido.every(n => dimsItem.some(nb => Math.abs(nb - n) / Math.max(n, 0.01) < 0.005))
@@ -472,7 +472,7 @@ export default function Comprador() {
         .sort((a, b) => b.score - a.score)
         .slice(0, 10)
 
-      // Para cada match, busca o preÃ§o
+      // Para cada match, busca o preço
       const sugestoesFinais = matches.map(item => {
         const precosDoFornecedor = (Array.isArray(precos) ? precos : [])
           .filter(p => p.fornecedor_nome === item.fornecedor_nome)
@@ -492,8 +492,8 @@ export default function Comprador() {
           ? (filial === 'Cascavel' ? melhorPreco.preco_cascavel : melhorPreco.preco_curitiba)
           : null
 
-        // Alta confianÃ§a = todas dimensÃµes batem exatamente
-        // MÃ©dia = tipo bate mas dimensÃµes parciais
+        // Alta confiança = todas dimensÂµes batem exatamente
+        // Média = tipo bate mas dimensÂµes parciais
         const confianca = item.todasDimensoesBatem ? 'alta' : 'media'
 
         return {
@@ -508,7 +508,7 @@ export default function Comprador() {
 
       setSugestoes(sugestoesFinais)
     } catch (err) {
-      console.error('Erro ao buscar sugestÃµes:', err)
+      console.error('Erro ao buscar sugestÂµes:', err)
     }
     setBuscandoSugestoes(false)
   }
@@ -524,7 +524,7 @@ export default function Comprador() {
       headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(patch)
     })
-    // Log da ediÃ§Ã£o
+    // Log da edição
     const campos = ['preco_unitario', 'prazo_entrega_dias', 'observacoes']
     for (const campo of campos) {
       const anterior = String(r[campo] ?? '')
@@ -578,15 +578,15 @@ export default function Comprador() {
   const semResposta = pedidos.filter(p => p.status === 'aberto')
   const comResposta = pedidos.filter(p => p.status !== 'aberto')
 
-  // Lead time mÃ©dio dos respondidos
+  // Lead time médio dos respondidos
   const ltsValidos = Object.values(leadtimes).filter(v => v !== null && v !== undefined)
   const ltMedio = ltsValidos.length ? Math.round(ltsValidos.reduce((a,b) => a+b, 0) / ltsValidos.length) : null
 
   if (selecionado) return (
     <div style={s.wrap}>
       <header style={s.header}>
-        <button style={s.backBtn} onClick={() => setSelecionado(null)}>â Voltar</button>
-        <div style={s.logoTitle}>Pedido de CotaÃ§Ã£o</div>
+        <button style={s.backBtn} onClick={() => setSelecionado(null)}>← Voltar</button>
+        <div style={s.logoTitle}>Pedido de Cotação</div>
         <button style={s.btnLink} onClick={() => { sessionStorage.removeItem('comprador_email'); setEmailLogado(null) }}>Sair</button>
       </header>
       <div style={s.content}>
@@ -598,12 +598,12 @@ export default function Comprador() {
             </div>
             <div style={{ display:'flex', gap:8, flexShrink:0 }}>
               {logEdicaoComp.length > 0 && (
-                <button title="Ver histÃ³rico de ediÃ§Ãµes" onClick={() => setShowLogComp(!showLogComp)}
-                  style={{ background:'none', border:'none', cursor:'pointer', fontSize:18, color:'#185FA5' }}>â</button>
+                <button title="Ver histórico de ediçãµes" onClick={() => setShowLogComp(!showLogComp)}
+                  style={{ background:'none', border:'none', cursor:'pointer', fontSize:18, color:'#185FA5' }}>ⓘ</button>
               )}
               {!editandoComp
                 ? <button onClick={() => { setEditandoComp(true); setFormEdicaoComp({ item_descricao: selecionado.item_descricao, classe: selecionado.classe, quantidade: selecionado.quantidade, unidade: selecionado.unidade, filial: selecionado.filial, prazo_necessario: selecionado.prazo_necessario || '', observacoes: selecionado.observacoes || '' }) }}
-                    style={{ background:'none', border:'0.5px solid rgba(0,0,0,0.2)', borderRadius:7, padding:'5px 12px', fontSize:12, cursor:'pointer' }}>âï¸ Editar</button>
+                    style={{ background:'none', border:'0.5px solid rgba(0,0,0,0.2)', borderRadius:7, padding:'5px 12px', fontSize:12, cursor:'pointer' }}>✏️ Editar</button>
                 : <div style={{ display:'flex', gap:6 }}>
                     <button onClick={() => salvarEdicaoComp(selecionado)} style={{ background:'#1D9E75', color:'#fff', border:'none', borderRadius:7, padding:'5px 12px', fontSize:12, cursor:'pointer' }}>Salvar</button>
                     <button onClick={() => setEditandoComp(false)} style={{ background:'none', border:'0.5px solid rgba(0,0,0,0.2)', borderRadius:7, padding:'5px 12px', fontSize:12, cursor:'pointer' }}>Cancelar</button>
@@ -614,14 +614,14 @@ export default function Comprador() {
 
           {showLogComp && logEdicaoComp.length > 0 && (
             <div style={{ background:'#F1EFE8', borderRadius:8, padding:'10px 14px', marginBottom:12, fontSize:12 }}>
-              <div style={{ fontWeight:600, marginBottom:6 }}>HistÃ³rico de ediÃ§Ãµes</div>
+              <div style={{ fontWeight:600, marginBottom:6 }}>Histórico de ediçãµes</div>
               {logEdicaoComp.map((l,i) => (
                 <div key={i} style={{ borderBottom:'0.5px solid rgba(0,0,0,0.08)', paddingBottom:4, marginBottom:4 }}>
-                  <span style={{ color:'#888780' }}>{new Date(l.editado_em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})} Â· </span>
+                  <span style={{ color:'#888780' }}>{new Date(l.editado_em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})} · </span>
                   <span style={{ fontWeight:500 }}>{l.editado_por}</span>
                   <span style={{ color:'#888780' }}> alterou </span><span style={{ fontWeight:500 }}>{l.campo}</span>
-                  <span style={{ color:'#888780' }}> de </span><span style={{ textDecoration:'line-through', color:'#E24B4A' }}>{l.valor_anterior||'â'}</span>
-                  <span style={{ color:'#888780' }}> para </span><span style={{ color:'#1D9E75', fontWeight:500 }}>{l.valor_novo||'â'}</span>
+                  <span style={{ color:'#888780' }}> de </span><span style={{ textDecoration:'line-through', color:'#E24B4A' }}>{l.valor_anterior||'—'}</span>
+                  <span style={{ color:'#888780' }}> para </span><span style={{ color:'#1D9E75', fontWeight:500 }}>{l.valor_novo||'—'}</span>
                 </div>
               ))}
             </div>
@@ -630,10 +630,10 @@ export default function Comprador() {
           {!editandoComp ? (
             <>
               <div style={s.metaGrid}>
-                <div><div style={s.metaLabel}>Vendedor</div><div style={s.metaVal}>{selecionado.usuarios?.nome || 'â'}</div></div>
+                <div><div style={s.metaLabel}>Vendedor</div><div style={s.metaVal}>{selecionado.usuarios?.nome || '—'}</div></div>
                 <div><div style={s.metaLabel}>Quantidade</div><div style={s.metaVal}>{selecionado.quantidade} {selecionado.unidade}</div></div>
                 <div><div style={s.metaLabel}>Filial</div><div style={s.metaVal}>{selecionado.filial}</div></div>
-                {selecionado.numero_cotacao && <div><div style={s.metaLabel}>NÂº CotaÃ§Ã£o</div><div style={s.metaVal}>#{selecionado.numero_cotacao}</div></div>}
+                {selecionado.numero_cotacao && <div><div style={s.metaLabel}>Nº Cotação</div><div style={s.metaVal}>#{selecionado.numero_cotacao}</div></div>}
                 <div><div style={s.metaLabel}>Lead time resposta</div><div style={s.metaVal}>{formatarLeadTime(leadtimes[selecionado.id])}</div></div>
               </div>
               {selecionado.observacoes && <div style={s.obs}>{selecionado.observacoes}</div>}
@@ -641,7 +641,7 @@ export default function Comprador() {
           ) : (
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
               <div style={{ gridColumn:'1/-1' }}>
-                <label style={s.metaLabel}>DescriÃ§Ã£o</label>
+                <label style={s.metaLabel}>Descrição</label>
                 <input style={{ width:'100%', padding:'8px 10px', border:'0.5px solid rgba(0,0,0,0.2)', borderRadius:7, fontSize:13, outline:'none', boxSizing:'border-box' }} value={formEdicaoComp.item_descricao||''} onChange={e => setFormEdicaoComp(f=>({...f,item_descricao:e.target.value}))} />
               </div>
               <div>
@@ -665,7 +665,7 @@ export default function Comprador() {
                 <input type="number" style={{ width:'100%', padding:'8px 10px', border:'0.5px solid rgba(0,0,0,0.2)', borderRadius:7, fontSize:13, outline:'none' }} value={formEdicaoComp.prazo_necessario||''} onChange={e => setFormEdicaoComp(f=>({...f,prazo_necessario:e.target.value}))} />
               </div>
               <div style={{ gridColumn:'1/-1' }}>
-                <label style={s.metaLabel}>ObservaÃ§Ãµes</label>
+                <label style={s.metaLabel}>Observaçãµes</label>
                 <input style={{ width:'100%', padding:'8px 10px', border:'0.5px solid rgba(0,0,0,0.2)', borderRadius:7, fontSize:13, outline:'none', boxSizing:'border-box' }} value={formEdicaoComp.observacoes||''} onChange={e => setFormEdicaoComp(f=>({...f,observacoes:e.target.value}))} />
               </div>
             </div>
@@ -673,13 +673,13 @@ export default function Comprador() {
         </div>
 
 
-        {/* Card de sugestÃµes automÃ¡ticas */}
+        {/* Card de sugestÂµes automáticas */}
         {(buscandoSugestoes || sugestoes.length > 0) && (
           <div style={{ ...s.card, background:'#F0FBF7', border:'1px solid #1D9E75' }}>
             <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom: buscandoSugestoes ? 0 : 14 }}>
               <span style={{ fontSize:16 }}>ð¤</span>
               <h3 style={{ fontSize:14, fontWeight:600, color:'#085041' }}>
-                {buscandoSugestoes ? 'Buscando disponibilidade nos fornecedores...' : `Estoque disponÃ­vel â ${sugestoes.length} fornecedor${sugestoes.length !== 1 ? 'es' : ''} com o item`}
+                {buscandoSugestoes ? 'Buscando disponibilidade nos fornecedores...' : `Estoque disponível — ${sugestoes.length} fornecedor${sugestoes.length !== 1 ? 'es' : ''} com o item`}
               </h3>
             </div>
             {buscandoSugestoes && (
@@ -692,19 +692,19 @@ export default function Comprador() {
                     <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
                       <span style={{ fontWeight:600, fontSize:15 }}>{s2.fornecedor}</span>
                       <span style={{ fontSize:11, padding:'2px 7px', borderRadius:4, background: s2.confianca === 'alta' ? '#E1F5EE' : s2.confianca === 'media' ? '#FAEEDA' : '#F1EFE8', color: s2.confianca === 'alta' ? '#085041' : s2.confianca === 'media' ? '#633806' : '#888780', fontWeight:600 }}>
-                        {s2.confianca === 'alta' ? 'â Alta confianÃ§a' : s2.confianca === 'media' ? '~ MÃ©dia confianÃ§a' : '? Baixa confianÃ§a'}
+                        {s2.confianca === 'alta' ? '✓ Alta confiança' : s2.confianca === 'media' ? '~ Média confiança' : '? Baixa confiança'}
                       </span>
                     </div>
                     <div style={{ fontSize:13, color:'#5F5E5A', marginBottom:4 }}>{s2.item_estoque}</div>
                     <div style={{ fontSize:12, color:'#888780' }}>ð¦ Estoque: <strong style={{ color: s2.quantidade_disponivel >= selecionado.quantidade ? '#085041' : '#A32D2D' }}>{s2.quantidade_disponivel?.toLocaleString('pt-BR')} kg</strong>
-                      {s2.quantidade_disponivel < selecionado.quantidade && <span style={{ color:'#A32D2D' }}> â insuficiente para {selecionado.quantidade} kg</span>}
+                      {s2.quantidade_disponivel < selecionado.quantidade && <span style={{ color:'#A32D2D' }}> — insuficiente para {selecionado.quantidade} kg</span>}
                     </div>
                     {s2.observacao && <div style={{ fontSize:12, color:'#888780', marginTop:4, fontStyle:'italic' }}>{s2.observacao}</div>}
                   </div>
                   <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:8, flexShrink:0, marginLeft:16 }}>
                     {s2.preco_unitario > 0 && (
                       <div style={{ textAlign:'right' }}>
-                        <div style={{ fontSize:10, color:'#888780', marginBottom:2 }}>preÃ§o tabela</div>
+                        <div style={{ fontSize:10, color:'#888780', marginBottom:2 }}>preço tabela</div>
                         <div style={{ fontSize:20, fontWeight:700, color:'#185FA5' }}>R$ {parseFloat(s2.preco_unitario).toFixed(2)}<span style={{ fontSize:11, color:'#888780', fontWeight:400 }}>/kg</span></div>
                         <div style={{ fontSize:12, color:'#5F5E5A' }}>Total: R$ {(s2.preco_unitario * selecionado.quantidade).toLocaleString('pt-BR', { minimumFractionDigits:2 })}</div>
                       </div>
@@ -717,12 +717,12 @@ export default function Comprador() {
                           preco_unitario: s2.preco_unitario > 0 ? String(parseFloat(s2.preco_unitario).toFixed(2)) : prev.preco_unitario,
                           observacoes: s2.item_estoque || prev.observacoes
                         }))
-                        // Rolar para o formulÃ¡rio
+                        // Rolar para o formulário
                         setTimeout(() => document.getElementById('form-resposta')?.scrollIntoView({ behavior: 'smooth' }), 100)
                       }}
                       style={{ background:'#185FA5', color:'#fff', border:'none', borderRadius:8, padding:'7px 14px', fontSize:13, cursor:'pointer', fontWeight:600, whiteSpace:'nowrap' }}
                     >
-                      Usar este â
+                      Usar este ↓
                     </button>
                   </div>
                 </div>
@@ -734,24 +734,24 @@ export default function Comprador() {
           </div>
         )}
 
-        {/* HistÃ³rico de cotaÃ§Ãµes anteriores */}
+        {/* Histórico de cotaçãµes anteriores */}
         {historico.length > 0 && (
           <div style={{ ...s.card, background:'#FFFBF0', border:'1px solid #FAE8A0' }}>
             <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
               <span style={{ fontSize:16 }}>ð¡</span>
-              <h3 style={{ fontSize:14, fontWeight:600, color:'#633806' }}>ReferÃªncia â cotaÃ§Ãµes anteriores deste item</h3>
+              <h3 style={{ fontSize:14, fontWeight:600, color:'#633806' }}>ReferÂªncia — cotaçãµes anteriores deste item</h3>
             </div>
             {historico.map((h, idx) => (
               <div key={idx} style={{ marginBottom: idx < historico.length - 1 ? 12 : 0 }}>
                 <div style={{ fontSize:11, color:'#888780', marginBottom:6, textTransform:'uppercase', letterSpacing:'0.04em' }}>
-                  {new Date(h.pedido.criado_em).toLocaleDateString('pt-BR')} Â· {h.pedido.filial} Â· {h.pedido.quantidade} {h.pedido.unidade}
+                  {new Date(h.pedido.criado_em).toLocaleDateString('pt-BR')} · {h.pedido.filial} · {h.pedido.quantidade} {h.pedido.unidade}
                 </div>
                 {h.respostas.map((r, i) => (
                   <div key={r.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 10px', background: i===0 ? '#FEF3C7' : '#fff', borderRadius:8, marginBottom:4, border:'0.5px solid rgba(0,0,0,0.08)' }}>
                     <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                       {i === 0 && <span style={{ fontSize:11, background:'#F59E0B', color:'#fff', padding:'1px 6px', borderRadius:4, fontWeight:600 }}>menor</span>}
-                      <span style={{ fontSize:14, fontWeight:500 }}>{fornecedoresMap[r.fornecedor_id] || 'â'}</span>
-                      {r.prazo_entrega_dias && <span style={{ fontSize:12, color:'#888780' }}>Â· {r.prazo_entrega_dias} dias</span>}
+                      <span style={{ fontSize:14, fontWeight:500 }}>{fornecedoresMap[r.fornecedor_id] || '—'}</span>
+                      {r.prazo_entrega_dias && <span style={{ fontSize:12, color:'#888780' }}>· {r.prazo_entrega_dias} dias</span>}
                     </div>
                     <span style={{ fontSize:16, fontWeight:700, color: i===0 ? '#633806' : '#444441' }}>R$ {parseFloat(r.preco_unitario).toFixed(2)}<span style={{ fontSize:11, fontWeight:400, color:'#888780' }}>/kg</span></span>
                   </div>
@@ -762,31 +762,31 @@ export default function Comprador() {
         )}
 
         <div id="form-resposta" style={s.card}>
-          <h3 style={s.sectionTitle}>LanÃ§ar resposta do fornecedor</h3>
+          <h3 style={s.sectionTitle}>Lançar resposta do fornecedor</h3>
           <form onSubmit={salvarResposta} style={s.form}>
             <div style={s.row}>
               <div style={s.field}><label style={s.label}>Fornecedor</label><input style={s.input} value={novaResposta.fornecedor_nome} onChange={e => setNovaResposta(f=>({...f,fornecedor_nome:e.target.value}))} placeholder="Nome do fornecedor" required /></div>
-              <div style={s.field}><label style={s.label}>PreÃ§o unitÃ¡rio (R$/kg)</label><input style={s.input} type="number" step="0.01" value={novaResposta.preco_unitario} onChange={e => setNovaResposta(f=>({...f,preco_unitario:e.target.value}))} placeholder="0,00" required /></div>
+              <div style={s.field}><label style={s.label}>Preço unitário (R$/kg)</label><input style={s.input} type="number" step="0.01" value={novaResposta.preco_unitario} onChange={e => setNovaResposta(f=>({...f,preco_unitario:e.target.value}))} placeholder="0,00" required /></div>
             </div>
             <div style={s.row}>
               <div style={s.field}><label style={s.label}>Prazo (dias)</label><input style={s.input} type="number" value={novaResposta.prazo_entrega_dias} onChange={e => setNovaResposta(f=>({...f,prazo_entrega_dias:e.target.value}))} /></div>
-              <div style={s.field}><label style={s.label}>ObservaÃ§Ãµes</label><input style={s.input} value={novaResposta.observacoes} onChange={e => setNovaResposta(f=>({...f,observacoes:e.target.value}))} /></div>
+              <div style={s.field}><label style={s.label}>Observaçãµes</label><input style={s.input} value={novaResposta.observacoes} onChange={e => setNovaResposta(f=>({...f,observacoes:e.target.value}))} /></div>
             </div>
-            <button style={s.btnPrimary} type="submit" disabled={salvando}>{salvando?'Salvando...':'LanÃ§ar resposta'}</button>
+            <button style={s.btnPrimary} type="submit" disabled={salvando}>{salvando?'Salvando...':'Lançar resposta'}</button>
           </form>
         </div>
 
         {respostas.length > 0 && (
           <div style={s.card}>
-            <h3 style={s.sectionTitle}>Mapa comparativo â {respostas.length} {respostas.length===1?'resposta':'respostas'}</h3>
+            <h3 style={s.sectionTitle}>Mapa comparativo — {respostas.length} {respostas.length===1?'resposta':'respostas'}</h3>
             {respostas.map(r => (
               <div key={r.id} style={{ ...s.respostaCard, ...(parseFloat(r.preco_unitario)===menorPreco?s.melhor:{}) }}>
                 {editandoResposta === r.id ? (
                   <div style={{ flex:1 }}>
-                    <div style={{ fontWeight:600, fontSize:14, marginBottom:8 }}>{fornecedoresMap[r.fornecedor_id]||'â'}</div>
+                    <div style={{ fontWeight:600, fontSize:14, marginBottom:8 }}>{fornecedoresMap[r.fornecedor_id]||'—'}</div>
                     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
                       <div>
-                        <div style={{ fontSize:11, color:'#888780', marginBottom:3 }}>PREÃO (R$/kg)</div>
+                        <div style={{ fontSize:11, color:'#888780', marginBottom:3 }}>PREÂO (R$/kg)</div>
                         <input type="number" step="0.01"
                           style={{ width:'100%', padding:'6px 8px', border:'0.5px solid rgba(0,0,0,0.2)', borderRadius:6, fontSize:13, outline:'none', boxSizing:'border-box' }}
                           value={formEditResposta.preco_unitario ?? r.preco_unitario}
@@ -801,7 +801,7 @@ export default function Comprador() {
                       </div>
                     </div>
                     <div style={{ marginBottom:8 }}>
-                      <div style={{ fontSize:11, color:'#888780', marginBottom:3 }}>OBSERVAÃÃES</div>
+                      <div style={{ fontSize:11, color:'#888780', marginBottom:3 }}>OBSERVAÂÂES</div>
                       <input style={{ width:'100%', padding:'6px 8px', border:'0.5px solid rgba(0,0,0,0.2)', borderRadius:6, fontSize:13, outline:'none', boxSizing:'border-box' }}
                         value={formEditResposta.observacoes ?? r.observacoes ?? ''}
                         onChange={e => setFormEditResposta(f => ({...f, observacoes: e.target.value}))} />
@@ -816,15 +816,15 @@ export default function Comprador() {
                 ) : (
                   <>
                     <div style={{ flex:1 }}>
-                      {parseFloat(r.preco_unitario)===menorPreco && <span style={s.melhorBadge}>â­ Melhor preÃ§o</span>}
-                      <div style={{ fontWeight:500, fontSize:15 }}>{fornecedoresMap[r.fornecedor_id]||'â'}</div>
-                      <div style={{ fontSize:12, color:'#888780', marginTop:2 }}>Prazo: {r.prazo_entrega_dias||'â'} dias{r.observacoes&&` Â· ${r.observacoes}`}</div>
+                      {parseFloat(r.preco_unitario)===menorPreco && <span style={s.melhorBadge}>â­ Melhor preço</span>}
+                      <div style={{ fontWeight:500, fontSize:15 }}>{fornecedoresMap[r.fornecedor_id]||'—'}</div>
+                      <div style={{ fontSize:12, color:'#888780', marginTop:2 }}>Prazo: {r.prazo_entrega_dias||'—'} dias{r.observacoes&&` · ${r.observacoes}`}</div>
                       <div style={{ fontSize:13, color:'#5F5E5A', marginTop:4 }}>Total: <strong>R$ {(parseFloat(r.preco_unitario)*parseFloat(selecionado.quantidade)).toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></div>
                     </div>
                     <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:6 }}>
                       <div style={{ fontSize:22, fontWeight:700 }}>R$ {parseFloat(r.preco_unitario).toFixed(2)}<span style={{ fontSize:12, color:'#888780', fontWeight:400 }}>/kg</span></div>
                       <button onClick={() => { setEditandoResposta(r.id); setFormEditResposta({ preco_unitario: r.preco_unitario, prazo_entrega_dias: r.prazo_entrega_dias, observacoes: r.observacoes }) }}
-                        style={{ background:'none', border:'0.5px solid rgba(0,0,0,0.15)', borderRadius:6, padding:'3px 10px', fontSize:11, cursor:'pointer', color:'#5F5E5A' }}>âï¸ Editar</button>
+                        style={{ background:'none', border:'0.5px solid rgba(0,0,0,0.15)', borderRadius:6, padding:'3px 10px', fontSize:11, cursor:'pointer', color:'#5F5E5A' }}>✏️ Editar</button>
                     </div>
                   </>
                 )}
@@ -841,7 +841,7 @@ export default function Comprador() {
       <header style={s.header}>
         <div style={s.headerLeft}>
           <div style={s.logo}>T</div>
-          <div><div style={s.logoTitle}>TrezaÃ§o</div><div style={s.logoSub}>Comprador â {emailLogado}</div></div>
+          <div><div style={s.logoTitle}>Trezaço</div><div style={s.logoSub}>Comprador — {emailLogado}</div></div>
         </div>
         <button style={s.btnLink} onClick={() => { sessionStorage.removeItem('comprador_email'); setEmailLogado(null) }}>Sair</button>
       </header>
@@ -857,7 +857,7 @@ export default function Comprador() {
         </div>
         <div style={{ background:'#fff', borderRadius:10, border:'0.5px solid rgba(0,0,0,0.1)', padding:'1rem', textAlign:'center', borderLeft:'3px solid #185FA5' }}>
           <div style={{ fontSize:24, fontWeight:700, color:'#185FA5' }}>{formatarLeadTime(ltMedio)}</div>
-          <div style={{ fontSize:11, color:'#888780', marginTop:4 }}>Lead time mÃ©dio</div>
+          <div style={{ fontSize:11, color:'#888780', marginTop:4 }}>Lead time médio</div>
         </div>
         <div style={{ background:'#fff', borderRadius:10, border:'0.5px solid rgba(0,0,0,0.1)', padding:'1rem', textAlign:'center', borderLeft:'3px solid #888780' }}>
           <div style={{ fontSize:24, fontWeight:700, color:'#888780' }}>{pedidos.length}</div>
@@ -873,7 +873,7 @@ export default function Comprador() {
             <div style={s.sideSection}>BUSCA</div>
             <input
               style={{ width:'100%', padding:'8px 12px', border:'0.5px solid rgba(0,0,0,0.15)', borderRadius:8, fontSize:13, outline:'none', boxSizing:'border-box' }}
-              placeholder="ð Buscar item, #nÃºmero..."
+              placeholder="ð Buscar item, #número..."
               value={busca}
               onChange={e => setBusca(e.target.value)}
             />
@@ -918,7 +918,7 @@ export default function Comprador() {
           {(filtro !== 'todos' || filtroFilial !== 'todas' || filtroClasse !== 'todas' || busca) && (
             <button onClick={() => { setFiltro('todos'); setFiltroFilial('todas'); setFiltroClasse('todas'); setBusca('') }}
               style={{ width:'100%', padding:'8px', background:'none', border:'0.5px solid rgba(0,0,0,0.15)', borderRadius:8, fontSize:13, cursor:'pointer', color:'#888780' }}>
-              â Limpar filtros
+              ✕ Limpar filtros
             </button>
           )}
         </aside>
