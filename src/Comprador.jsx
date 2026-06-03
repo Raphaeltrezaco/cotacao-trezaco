@@ -492,8 +492,10 @@ export default function Comprador() {
     }
     await postSupabase('respostas_cotacao', { pedido_id: selecionado.id, fornecedor_id, preco_unitario: parseFloat(novaResposta.preco_unitario), prazo_entrega_dias: parseInt(novaResposta.prazo_entrega_dias)||null, observacoes: novaResposta.observacoes, origem: 'whatsapp_manual' })
     await patchSupabase('pedidos_cotacao', `id=eq.${selecionado.id}`, { status: 'respostas_recebidas' })
+    const selecionadoAtualizado = { ...selecionado, status: 'respostas_recebidas' }
+    setSelecionado(selecionadoAtualizado)
     setNovaResposta({ fornecedor_nome:'', preco_unitario:'', prazo_entrega_dias:'', observacoes:'' })
-    abrirPedido(selecionado)
+    abrirPedido(selecionadoAtualizado)
     carregarPedidos()
     setSalvando(false)
   }
