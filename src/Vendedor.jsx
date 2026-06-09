@@ -323,7 +323,8 @@ export default function Vendedor() {
   }, [pedidos, filtroPedidos, filtroDestino, filtroClassePedidos, buscaPedidos])
 
   const pedidosFiltrados = pedidos.filter(p => {
-    if (filtroPedidos !== 'todos' && p.status !== filtroPedidos) return false
+    if (filtroPedidos === 'aguardando' && p.status !== 'aberto') return false
+    if (filtroPedidos === 'respondidos' && p.status !== 'respostas_recebidas') return false
     if (filtroDestino !== 'todos' && p.destino !== filtroDestino) return false
     if (filtroClassePedidos !== 'todos' && p.classe !== filtroClassePedidos) return false
     if (buscaPedidos && !p.item_descricao?.toLowerCase().includes(buscaPedidos.toLowerCase()) && !p.item_codigo?.includes(buscaPedidos)) return false
