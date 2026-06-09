@@ -155,15 +155,25 @@ export default function Vendedor() {
       }
     }
     setPrecosPedidos(precos)
-    // Calcular leadtime de cada pedido
+    // Calcular leadtime — busca todas as primeiras respostas de uma vez
     const ltMap = {}
-    for (const p of lista) {
-      if (p.status !== 'aberto') {
-        const resps = await fetchSupabase('respostas_cotacao', `?pedido_id=eq.${p.id}&order=criado_em.asc&limit=1`)
-        if (Array.isArray(resps) && resps.length > 0) ltMap[p.id] = minutosUteis(p.criado_em, resps[0].criado_em)
-      } else {
-        ltMap[p.id] = minutosUteis(p.criado_em, new Date().toISOString())
+    const respondidos = lista.filter(p => p.status !== 'aberto')
+    if (respondidos.length > 0) {
+      const ids = respondidos.map(p => p.id).join(',')
+      const todasResps = await fetchSupabase('respostas_cotacao', `?pedido_id=in.(${ids})&select=pedido_id,criado_em&order=pedido_id,criado_em.asc`)
+      const primeiraResp = {}
+      if (Array.isArray(todasResps)) {
+        for (const r of todasResps) {
+          if (!primeiraResp[r.pedido_id]) primeiraResp[r.pedido_id] = r.criado_em
+        }
       }
+      for (const p of respondidos) {
+        if (primeiraResp[p.id]) ltMap[p.id] = minutosUteis(p.criado_em, primeiraResp[p.id])
+      }
+    }
+    const agora = new Date().toISOString()
+    for (const p of lista.filter(p => p.status === 'aberto')) {
+      ltMap[p.id] = minutosUteis(p.criado_em, agora)
     }
     setLeadtimesVend(ltMap)
   }
