@@ -77,14 +77,28 @@ function LoginVendedor({ onLogin }) {
 function minutosUteis(inicio, fim) {
   if (!inicio || !fim) return null
   const start = new Date(inicio), end = new Date(fim)
-  let mins = 0, cur = new Date(start)
+  if (end <= start) return 0
+  let mins = 0
+  let cur = new Date(start)
+  // Avança para próximo horário útil
   while (cur < end) {
-    const h = cur.getHours(), d = cur.getDay()
-    if (d !== 0 && d !== 6 && h >= 8 && h < 18) mins++
-    cur = new Date(cur.getTime() + 60000)
-    if (mins > 14400) break
+    const d = cur.getDay(), h = cur.getHours()
+    if (d === 0 || d === 6 || h < 8 || h >= 18) {
+      // Fora do horário — pular para próximo dia útil às 8h
+      if (d === 6) cur.setDate(cur.getDate() + 2)
+      else if (d === 0) cur.setDate(cur.getDate() + 1)
+      else if (h >= 18) cur.setDate(cur.getDate() + 1)
+      cur.setHours(8, 0, 0, 0)
+      continue
+    }
+    // Fim do dia útil hoje
+    const fimDia = new Date(cur); fimDia.setHours(18, 0, 0, 0)
+    const ate = end < fimDia ? end : fimDia
+    mins += Math.round((ate - cur) / 60000)
+    cur = new Date(fimDia)
+    cur.setDate(cur.getDate() + 1); cur.setHours(8, 0, 0, 0)
   }
-  return mins
+  return Math.min(mins, 14400)
 }
 
 function formatarLeadTimeV(min) {
