@@ -175,6 +175,7 @@ export default function Vendedor() {
     for (const p of lista.filter(p => p.status === 'aberto')) {
       ltMap[p.id] = minutosUteis(p.criado_em, agora)
     }
+    console.log("LEADTIMES:", ltMap, "total:", Object.keys(ltMap).length)
     setLeadtimesVend(ltMap)
   }
 
