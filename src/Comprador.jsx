@@ -145,10 +145,20 @@ export default function Comprador() {
   async function carregarPedidos() {
     const data = await fetchSupabase('pedidos_cotacao', '?order=criado_em.asc&select=*,usuarios!pedidos_cotacao_vendedor_id_fkey(nome)')
     const pedidosList = Array.isArray(data) ? data : []
-    // Buscar grupos de todos os itens de uma vez
-    const itensData = await fetchSupabase('itens', '?select=codigo,grupo&limit=10000')
+    // Buscar grupos — só dos códigos que aparecem nos pedidos
+    const codigos = [...new Set(pedidosList.map(p => p.item_codigo).filter(Boolean))]
     const grupoMap = {}
-    if (Array.isArray(itensData)) itensData.forEach(it => { if (it.grupo) grupoMap[it.codigo] = it.grupo })
+    if (codigos.length > 0) {
+      // Supabase limita 1000/req — dividir em chunks de 100
+      for (let i = 0; i < codigos.length; i += 100) {
+        const chunk = codigos.slice(i, i + 100)
+        const res = await fetch(`${URL}/rest/v1/itens?codigo=in.(${chunk.join(',')})&select=codigo,grupo`, {
+          headers: { 'apikey': KEY, 'Authorization': `Bearer ${KEY}` }
+        })
+        const itensChunk = await res.json()
+        if (Array.isArray(itensChunk)) itensChunk.forEach(it => { if (it.grupo) grupoMap[it.codigo] = it.grupo })
+      }
+    }
     const pedidosComGrupo = pedidosList.map(p => ({ ...p, item_grupo: grupoMap[p.item_codigo] || null }))
     setPedidos(pedidosComGrupo)
     const ltMap = {}
