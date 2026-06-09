@@ -145,17 +145,10 @@ export default function Comprador() {
   async function carregarPedidos() {
     const data = await fetchSupabase('pedidos_cotacao', '?order=criado_em.asc&select=*,usuarios!pedidos_cotacao_vendedor_id_fkey(nome)')
     const pedidosList = Array.isArray(data) ? data : []
-    // Buscar grupos dos itens
-    const codigos = [...new Set(pedidosList.map(p => p.item_codigo).filter(Boolean))]
-    let grupoMap = {}
-    if (codigos.length > 0) {
-      const chunks = []
-      for (let i = 0; i < codigos.length; i += 50) chunks.push(codigos.slice(i, i+50))
-      for (const chunk of chunks) {
-        const itensData = await fetchSupabase('itens', `?codigo=in.(${chunk.join(',')})&select=codigo,grupo`)
-        if (Array.isArray(itensData)) itensData.forEach(it => { grupoMap[it.codigo] = it.grupo })
-      }
-    }
+    // Buscar grupos de todos os itens de uma vez
+    const itensData = await fetchSupabase('itens', '?select=codigo,grupo&limit=10000')
+    const grupoMap = {}
+    if (Array.isArray(itensData)) itensData.forEach(it => { if (it.grupo) grupoMap[it.codigo] = it.grupo })
     const pedidosComGrupo = pedidosList.map(p => ({ ...p, item_grupo: grupoMap[p.item_codigo] || null }))
     setPedidos(pedidosComGrupo)
     const ltMap = {}
