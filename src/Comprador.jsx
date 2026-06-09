@@ -133,6 +133,8 @@ export default function Comprador() {
   const [salvando, setSalvando] = useState(false)
   const [filtro, setFiltro] = useState('todos')
   const [busca, setBusca] = useState('')
+  const [filtroVendedor, setFiltroVendedor] = useState('todos')
+  const [filtroGrupo, setFiltroGrupo] = useState('todos')
   const [filtroFilial, setFiltroFilial] = useState('todas')
   const [filtroClasse, setFiltroClasse] = useState('todas')
 
@@ -141,9 +143,21 @@ export default function Comprador() {
   if (!emailLogado) return <LoginComprador onLogin={setEmailLogado} />
 
   async function carregarPedidos() {
-    const data = await fetchSupabase('pedidos_cotacao', '?order=criado_em.desc&select=*,usuarios!pedidos_cotacao_vendedor_id_fkey(nome)')
+    const data = await fetchSupabase('pedidos_cotacao', '?order=criado_em.asc&select=*,usuarios!pedidos_cotacao_vendedor_id_fkey(nome)')
     const pedidosList = Array.isArray(data) ? data : []
-    setPedidos(pedidosList)
+    // Buscar grupos dos itens
+    const codigos = [...new Set(pedidosList.map(p => p.item_codigo).filter(Boolean))]
+    let grupoMap = {}
+    if (codigos.length > 0) {
+      const chunks = []
+      for (let i = 0; i < codigos.length; i += 50) chunks.push(codigos.slice(i, i+50))
+      for (const chunk of chunks) {
+        const itensData = await fetchSupabase('itens', `?codigo=in.(${chunk.join(',')})&select=codigo,grupo`)
+        if (Array.isArray(itensData)) itensData.forEach(it => { grupoMap[it.codigo] = it.grupo })
+      }
+    }
+    const pedidosComGrupo = pedidosList.map(p => ({ ...p, item_grupo: grupoMap[p.item_codigo] || null }))
+    setPedidos(pedidosComGrupo)
     const ltMap = {}
     for (const p of pedidosList.filter(p => p.status !== 'aberto')) {
       const resps = await fetchSupabase('respostas_cotacao', `?pedido_id=eq.${p.id}&order=criado_em.asc&limit=1`)
@@ -307,82 +321,49 @@ export default function Comprador() {
         return res
       }
 
-      // Normaliza tipo — cobre todos os fornecedores
+      // Normaliza tipo do produto — mapeia nomenclaturas diferentes para o mesmo tipo
       function extrairTipo(s) {
         const S = normalizar(s)
-        // Tubos quadrados
-        if (S.includes('QUADR') || S.includes('TUBO QUAD') || S.includes('PERFIL QUAD')) return 'TUBO QUADRADO'
-        if (/TUBO\s+QD\b/.test(S) || /TUBO\s+QUA\b/.test(S)) return 'TUBO QUADRADO'
-        if (/^TQ\s+[\d.]/.test(S)) return 'TUBO QUADRADO'
-        if (/^TG\s+[\d.]/.test(S)) {
-          const lados = extrairNumeros(s).filter(d => d > 5)
-          if (lados.length >= 2) return Math.abs(lados[0]-lados[1])/Math.max(lados[0],0.01)<0.01 ? 'TUBO QUADRADO' : 'TUBO RETANGULAR'
-          return 'TUBO QUADRADO'
-        }
-        if (/^TBC\s/.test(S) || S.startsWith('TBC ')) {
-          const lados = extrairNumeros(s).filter(d => d > 5)
-          if (lados.length >= 2) return Math.abs(lados[0]-lados[1])/Math.max(lados[0],0.01)<0.01 ? 'TUBO QUADRADO' : 'TUBO RETANGULAR'
-          return 'TUBO QUADRADO'
-        }
-        if (/^PE[\d]/.test(S) || /^PL[\d]/.test(S)) {
-          const lados = extrairNumeros(s).filter(d => d > 5)
-          if (lados.length >= 2) return Math.abs(lados[0]-lados[1])/Math.max(lados[0],0.01)<0.01 ? 'TUBO QUADRADO' : 'TUBO RETANGULAR'
-          return 'TUBO QUADRADO'
-        }
-        if (S.includes('TB QD')) return 'TUBO QUADRADO'
-        if ((S.includes('TUBO FQ') || S.includes('TB FQ')) && S.match(/\d+X\d+X\d+/)) {
-          const lados = extrairNumeros(s).filter(d => d > 5)
-          if (lados.length >= 2) return Math.abs(lados[0]-lados[1])/Math.max(lados[0],0.01)<0.01 ? 'TUBO QUADRADO' : 'TUBO RETANGULAR'
-        }
+        // Tubos quadrados — todas nomenclaturas conhecidas
+        if (S.includes('QUADR') || S.includes('TUBO QUAD') || S.includes('TB QD') || S.includes('TB QD') || S.includes('TQ ') || (S.includes('TUBO FQ') && S.match(/\d+X\d+X\d+/))) return 'TUBO QUADRADO'
         // Tubos retangulares
-        if (S.includes('REtang') || S.includes('TUBO RET') || S.includes('PERFIL RET')) return 'TUBO RETANGULAR'
-        if (/TUBO\s+RT\b/.test(S)) return 'TUBO RETANGULAR'
-        if (S.includes('TB RT') || S.includes('TB RET') || S.includes('TUBO FR')) return 'TUBO RETANGULAR'
-        if (/^TR\s+[\d.]/.test(S)) return 'TUBO RETANGULAR'
+        if (S.includes('TUBO RET') || S.includes('TUBO FR') || S.includes('TB RT') || S.includes('TB RET')) return 'TUBO RETANGULAR'
         // Tubos redondos
-        if (S.includes('TUBO RED') || S.includes('PERFIL RED')) return 'TUBO REDONDO'
-        if (/TUBO\s+RD\b/.test(S)) return 'TUBO REDONDO'
-        if (S.includes('TUBO IND') || S.includes('TUBO NBR5590') || S.includes('TUBO NBR 5590')) return 'TUBO REDONDO'
-        if (S.includes('TB RD') || S.includes('TB RED')) return 'TUBO REDONDO'
-        if (/^TF\s+[\d.]/.test(S)) return 'TUBO REDONDO'
-        if (S.includes('REDOND')) return 'TUBO REDONDO'
-        if (/^(COM|CLD|TRF|NBR|AUT)\s+[\d.,]+X[\d.,]+X/.test(S)) return 'TUBO REDONDO'
+        if (S.includes('TUBO RED') || S.includes('TUBO IND') || S.includes('TUBO NBR5590') || S.includes('TUBO NBR 5590') || S.includes('TB RD') || S.includes('TB RED')) return 'TUBO REDONDO'
+        // Tubos FF/FQ sem qualificador (Marcegaglia: "TUBO FF - (40X40X2,00)")
+        // Usa dimensões para distinguir redondo/quadrado/retangular
         if (S.includes('TUBO FF') || S.includes('TUBO FQ') || S.includes('TB FF') || S.includes('TB FQ') || S.includes('TUBO BF')) {
           const lados = extrairNumeros(s).filter(d => d > 5)
           if (lados.length === 1) return 'TUBO REDONDO'
           if (lados.length === 2) return Math.abs(lados[0]-lados[1])/Math.max(lados[0],0.01)<0.01 ? 'TUBO QUADRADO' : 'TUBO RETANGULAR'
           return 'TUBO REDONDO'
         }
+        // Tubos galvanizados
         if (S.includes('TUBO GI') || S.includes('TUBO GV') || S.includes('TUBO ZC') || S.includes('GALV') || S.includes('TB GI') || S.includes('TB ZN') || S.includes('TZ ')) return 'TUBO GALVANIZADO'
         if (S.includes('TUBO') || S.includes('TB ')) return 'TUBO'
-        if (S.includes('CHAPA FF') || S.includes('CHP FF')) return 'CHAPA FF'
-        if (S.includes('CHAPA FQ') || S.includes('CHP FQ') || S.includes('CHP DO')) return 'CHAPA FQ'
+        // Chapas
+        if (S.includes('CHAPA FF') || S.includes('CHP FF') || (S.includes('CHP') && S.includes(' FF'))) return 'CHAPA FF'
+        if (S.includes('CHAPA FQ') || S.includes('CHP FQ') || S.includes('CHP DO') || (S.includes('CHP') && S.includes(' FQ'))) return 'CHAPA FQ'
         if (S.includes('CHAPA ZC') || S.includes('CHAPA ZN') || S.includes('CHP ZC')) return 'CHAPA ZC'
         if (S.includes('CHAPA') || S.includes('CHP ')) return 'CHAPA'
+        // Perfis
         if (S.includes('PERFIL UDC') || S.includes('PE UE') || S.includes('PE UC') || (S.includes('PERFIL U') && S.includes('CALHA'))) return 'PERFIL UDC'
         if (S.includes('PERFIL ZC') || S.includes('PE ZC')) return 'PERFIL ZC'
-        if (/PERFIL\s+U\s+\d/.test(S) || S.includes('PERFIL U ')) return 'PERFIL U'
-        if (S.includes('PERFIL ESTRUT') || S.includes('PERFIL ESTR')) return 'PERFIL ESTRUTURAL'
-        if (S.includes('PERFIL CARTOLA') || S.includes('CARTOLA')) return 'PERFIL CARTOLA'
         if (S.includes('PERFIL') || S.includes('PE ')) return 'PERFIL'
+        // Outros
         if (S.includes('CANTONEIRA') || S.includes('CTN ') || S.includes('PE EQ')) return 'CANTONEIRA'
-        if (S.includes('VIGA') || S.includes('PERFIL W') || S.includes('PE W') || S.includes('VIGA U') || S.includes('VIGA I')) return 'VIGA'
-        if (S.includes('BR CHATA') || S.includes('BARRA CHATA') || S.includes('BARRA LAM') || S.includes('BR.CH') || S.includes('B.CH') || /^BCH\s/.test(S)) return 'BARRA CHATA'
+        if (S.includes('VIGA') || S.includes('PERFIL W') || S.includes('PE W')) return 'VIGA'
+        if (S.includes('BR CHATA') || S.includes('BARRA CHATA') || S.includes('BR.CH') || S.includes('B.CH') || /^BCH\s/.test(S)) return 'BARRA CHATA'
         if (S.includes('BR RED') || S.includes('BARRA RED') || S.includes('BR REDONDA') || S.includes('B.RED') || S.includes('BR.RED')) return 'BARRA REDONDA'
         return S.split(' ')[0]
       }
 
-      // Pana CXS/CLP: TF/TQ/TR/TG
+      // Pana CXS: TF/TQ/TR + número
       function normalizarTipoCXS(s) {
         const S = normalizar(s)
         if (/^TF\s+[\d.]/.test(S)) return 'TUBO REDONDO'
         if (/^TQ\s+[\d.]/.test(S)) return 'TUBO QUADRADO'
         if (/^TR\s+[\d.]/.test(S)) return 'TUBO RETANGULAR'
-        if (/^TG\s+[\d.]/.test(S)) {
-          const lados = extrairNumeros(s).filter(d => d > 5)
-          if (lados.length >= 2) return Math.abs(lados[0]-lados[1])/Math.max(lados[0],0.01)<0.01 ? 'TUBO QUADRADO' : 'TUBO RETANGULAR'
-          return 'TUBO QUADRADO'
-        }
         return null
       }
 
@@ -525,10 +506,8 @@ export default function Comprador() {
     }
     await postSupabase('respostas_cotacao', { pedido_id: selecionado.id, fornecedor_id, preco_unitario: parseFloat(novaResposta.preco_unitario), prazo_entrega_dias: parseInt(novaResposta.prazo_entrega_dias)||null, observacoes: novaResposta.observacoes, origem: 'whatsapp_manual' })
     await patchSupabase('pedidos_cotacao', `id=eq.${selecionado.id}`, { status: 'respostas_recebidas' })
-    const selecionadoAtualizado = { ...selecionado, status: 'respostas_recebidas' }
-    setSelecionado(selecionadoAtualizado)
     setNovaResposta({ fornecedor_nome:'', preco_unitario:'', prazo_entrega_dias:'', observacoes:'' })
-    abrirPedido(selecionadoAtualizado)
+    abrirPedido(selecionado)
     carregarPedidos()
     setSalvando(false)
   }
@@ -541,15 +520,26 @@ export default function Comprador() {
     if (filtro === 'respondidos' && p.status === 'aberto') return false
     if (filtroFilial !== 'todas' && p.filial !== filtroFilial) return false
     if (filtroClasse !== 'todas' && p.classe !== filtroClasse) return false
+    if (filtroVendedor !== 'todos' && p.usuarios?.nome !== filtroVendedor) return false
+    if (filtroGrupo !== 'todos' && p.item_grupo !== filtroGrupo) return false
     if (busca && !p.item_descricao?.toLowerCase().includes(busca.toLowerCase()) && !p.item_codigo?.includes(busca) && !p.numero_cotacao?.includes(busca) && !String(p.numero_pedido ?? '').includes(busca.replace('#',''))) return false
     return true
   })
 
+  const vendedoresUnicos = [...new Set(pedidos.map(p => p.usuarios?.nome).filter(Boolean))].sort()
+  const gruposUnicos = [...new Set(pedidos.map(p => p.item_grupo).filter(Boolean))].sort()
+
   const semResposta = pedidos.filter(p => p.status === 'aberto')
   const comResposta = pedidos.filter(p => p.status !== 'aberto')
 
-  // Lead time médio dos respondidos
+  // Lead time: mediana (SLA) + média
   const ltsValidos = Object.values(leadtimes).filter(v => v !== null && v !== undefined)
+  const ltMediana = (() => {
+    if (!ltsValidos.length) return null
+    const sorted = [...ltsValidos].sort((a,b) => a-b)
+    const mid = Math.floor(sorted.length / 2)
+    return sorted.length % 2 !== 0 ? sorted[mid] : Math.round((sorted[mid-1] + sorted[mid]) / 2)
+  })()
   const ltMedio = ltsValidos.length ? Math.round(ltsValidos.reduce((a,b) => a+b, 0) / ltsValidos.length) : null
 
   if (selecionado) return (
@@ -826,8 +816,9 @@ export default function Comprador() {
           <div style={{ fontSize:11, color:'#888780', marginTop:4 }}>Respondidos</div>
         </div>
         <div style={{ background:'#fff', borderRadius:10, border:'0.5px solid rgba(0,0,0,0.1)', padding:'1rem', textAlign:'center', borderLeft:'3px solid #185FA5' }}>
-          <div style={{ fontSize:24, fontWeight:700, color:'#185FA5' }}>{formatarLeadTime(ltMedio)}</div>
-          <div style={{ fontSize:11, color:'#888780', marginTop:4 }}>Lead time médio</div>
+          <div style={{ fontSize:24, fontWeight:700, color:'#185FA5' }}>{formatarLeadTime(ltMediana)}</div>
+          <div style={{ fontSize:11, color:'#888780', marginTop:2 }}>SLA (mediana)</div>
+          {ltMedio && <div style={{ fontSize:11, color:'#aaa', marginTop:2 }}>média: {formatarLeadTime(ltMedio)}</div>}
         </div>
         <div style={{ background:'#fff', borderRadius:10, border:'0.5px solid rgba(0,0,0,0.1)', padding:'1rem', textAlign:'center', borderLeft:'3px solid #888780' }}>
           <div style={{ fontSize:24, fontWeight:700, color:'#888780' }}>{pedidos.length}</div>
@@ -885,8 +876,32 @@ export default function Comprador() {
             </div>
           </div>
 
-          {(filtro !== 'todos' || filtroFilial !== 'todas' || filtroClasse !== 'todas' || busca) && (
-            <button onClick={() => { setFiltro('todos'); setFiltroFilial('todas'); setFiltroClasse('todas'); setBusca('') }}
+          {/* Filtro Vendedor */}
+          {vendedoresUnicos.length > 0 && (
+            <div style={{ marginBottom:20 }}>
+              <div style={s.sideSection}>VENDEDOR</div>
+              <select value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)}
+                style={{ width:'100%', padding:'8px 10px', border:'0.5px solid rgba(0,0,0,0.15)', borderRadius:8, fontSize:13, outline:'none', background:'#fff' }}>
+                <option value="todos">Todos</option>
+                {vendedoresUnicos.map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
+            </div>
+          )}
+
+          {/* Filtro Grupo */}
+          {gruposUnicos.length > 0 && (
+            <div style={{ marginBottom:20 }}>
+              <div style={s.sideSection}>GRUPO</div>
+              <select value={filtroGrupo} onChange={e => setFiltroGrupo(e.target.value)}
+                style={{ width:'100%', padding:'8px 10px', border:'0.5px solid rgba(0,0,0,0.15)', borderRadius:8, fontSize:13, outline:'none', background:'#fff' }}>
+                <option value="todos">Todos</option>
+                {gruposUnicos.map(g => <option key={g} value={g}>{g}</option>)}
+              </select>
+            </div>
+          )}
+
+          {(filtro !== 'todos' || filtroFilial !== 'todas' || filtroClasse !== 'todas' || filtroVendedor !== 'todos' || filtroGrupo !== 'todos' || busca) && (
+            <button onClick={() => { setFiltro('todos'); setFiltroFilial('todas'); setFiltroClasse('todas'); setFiltroVendedor('todos'); setFiltroGrupo('todos'); setBusca('') }}
               style={{ width:'100%', padding:'8px', background:'none', border:'0.5px solid rgba(0,0,0,0.15)', borderRadius:8, fontSize:13, cursor:'pointer', color:'#888780' }}>
               ✕ Limpar filtros
             </button>

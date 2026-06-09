@@ -74,6 +74,26 @@ function LoginVendedor({ onLogin }) {
   )
 }
 
+function minutosUteis(inicio, fim) {
+  if (!inicio || !fim) return null
+  const start = new Date(inicio), end = new Date(fim)
+  let mins = 0, cur = new Date(start)
+  while (cur < end) {
+    const h = cur.getHours(), d = cur.getDay()
+    if (d !== 0 && d !== 6 && h >= 8 && h < 18) mins++
+    cur = new Date(cur.getTime() + 60000)
+    if (mins > 14400) break
+  }
+  return mins
+}
+
+function formatarLeadTimeV(min) {
+  if (min === null || min === undefined) return '—'
+  if (min < 60) return `${min}min`
+  if (min < 480) return `${Math.round(min/60*10)/10}h`
+  return `${Math.round(min/480*10)/10}d`
+}
+
 export default function Vendedor() {
   const navigate = useNavigate()
   const [usuario, setUsuario] = useState(() => {
@@ -81,6 +101,7 @@ export default function Vendedor() {
   })
   const [tab, setTab] = useState('novo')
   const [pedidos, setPedidos] = useState([])
+  const [leadtimesVend, setLeadtimesVend] = useState({})
   const [verTodos, setVerTodos] = useState(false)
   const [numeroCotacao, setNumeroCotacao] = useState('')
   const [itensCarrinho, setItensCarrinho] = useState([])
@@ -120,6 +141,17 @@ export default function Vendedor() {
       }
     }
     setPrecosPedidos(precos)
+    // Calcular leadtime de cada pedido
+    const ltMap = {}
+    for (const p of lista) {
+      if (p.status !== 'aberto') {
+        const resps = await fetchSupabase('respostas_cotacao', `?pedido_id=eq.${p.id}&order=criado_em.asc&limit=1`)
+        if (Array.isArray(resps) && resps.length > 0) ltMap[p.id] = minutosUteis(p.criado_em, resps[0].criado_em)
+      } else {
+        ltMap[p.id] = minutosUteis(p.criado_em, new Date().toISOString())
+      }
+    }
+    setLeadtimesVend(ltMap)
   }
 
   async function abrirPedido(pedido) {
@@ -599,6 +631,13 @@ export default function Vendedor() {
                             {p.usuarios?.nome && <span style={{ fontWeight:500, color:'#444441' }}>{p.usuarios.nome} · </span>}
                             {p.quantidade} {p.unidade} · {p.filial} · {new Date(p.criado_em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}
                           </div>
+                          {leadtimesVend[p.id] !== undefined && (
+                            <div style={{ fontSize:11, marginTop:3 }}>
+                              <span style={{ display:'inline-flex', alignItems:'center', gap:3, padding:'2px 7px', borderRadius:5, background: p.status==='aberto' ? '#E6F1FB' : '#E1F5EE', color: p.status==='aberto' ? '#0C447C' : '#085041', fontWeight:500 }}>
+                                ⏱ {formatarLeadTimeV(leadtimesVend[p.id])}
+                              </span>
+                            </div>
+                          )}
                         </div>
                         {melhorPreco && (
                           <div style={{ textAlign:'right', flexShrink:0 }}>
