@@ -147,7 +147,7 @@ export default function Comprador() {
     let pedidosList2 = []
     let from2 = 0
     while (true) {
-      const res2 = await fetch(`${URL}/rest/v1/pedidos_cotacao?order=criado_em.asc&select=*,usuarios!pedidos_cotacao_vendedor_id_fkey(nome)`, {
+      const res2 = await fetch(`${URL}/rest/v1/pedidos_cotacao?destino=eq.comprador&order=criado_em.asc&select=*,usuarios!pedidos_cotacao_vendedor_id_fkey(nome)`, {
         headers: { 'apikey': KEY, 'Authorization': `Bearer ${KEY}`, 'Range': `${from2}-${from2+999}`, 'Range-Unit': 'items' }
       })
       const page2 = await res2.json()
