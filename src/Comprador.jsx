@@ -143,7 +143,20 @@ export default function Comprador() {
   if (!emailLogado) return <LoginComprador onLogin={setEmailLogado} />
 
   async function carregarPedidos() {
-    const data = await fetchSupabase('pedidos_cotacao', '?order=criado_em.asc&select=*,usuarios!pedidos_cotacao_vendedor_id_fkey(nome)')
+    // Buscar pedidos com paginação (até 5000)
+    let pedidosList2 = []
+    let from2 = 0
+    while (true) {
+      const res2 = await fetch(`${URL}/rest/v1/pedidos_cotacao?order=criado_em.asc&select=*,usuarios!pedidos_cotacao_vendedor_id_fkey(nome)`, {
+        headers: { 'apikey': KEY, 'Authorization': `Bearer ${KEY}`, 'Range': `${from2}-${from2+999}`, 'Range-Unit': 'items' }
+      })
+      const page2 = await res2.json()
+      if (!Array.isArray(page2) || page2.length === 0) break
+      pedidosList2.push(...page2)
+      if (page2.length < 1000 || pedidosList2.length >= 5000) break
+      from2 += 1000
+    }
+    const data = pedidosList2
     const pedidosList = Array.isArray(data) ? data : []
     // Buscar grupos — só dos códigos que aparecem nos pedidos
     const codigos = [...new Set(pedidosList.map(p => p.item_codigo).filter(Boolean))]
