@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { fetchSupabase, postSupabase } from './supabase'
+import DashboardCompras from './DashboardCompras'
 
 const URL = 'https://cilbkzvuvwjeqtdpxcbs.supabase.co'
 const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpbGJrenZ1dndqZXF0ZHB4Y2JzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1NzQwNTAsImV4cCI6MjA5MzE1MDA1MH0._bn3Je-gsu4Edc8SKr-fQBVW5dxCOIKn_zxqT61wq2M'
@@ -137,6 +138,7 @@ export default function Comprador() {
   const [filtroGrupo, setFiltroGrupo] = useState('todos')
   const [filtroFilial, setFiltroFilial] = useState('todas')
   const [filtroClasse, setFiltroClasse] = useState('todas')
+  const [mostrarDash, setMostrarDash] = useState(false)
 
   useEffect(() => { if (emailLogado) carregarPedidos() }, [emailLogado])
 
@@ -935,8 +937,24 @@ export default function Comprador() {
                 {pedidosFiltrados.map(p => <PedidoCard key={p.id} p={p} onClick={() => abrirPedido(p)} leadtime={leadtimes[p.id]} />)}
               </>
           }
-        </main>
+</main>
       </div>
+
+      {!mostrarDash && (
+        <button onClick={() => setMostrarDash(true)}
+          style={{ position:'fixed', bottom:24, right:24, zIndex:50, background:'#185FA5', color:'#fff', border:'none', borderRadius:24, padding:'12px 20px', fontSize:14, fontWeight:600, cursor:'pointer', boxShadow:'0 2px 12px rgba(0,0,0,0.25)' }}>
+          📊 Dashboard
+        </button>
+      )}
+      {mostrarDash && (
+        <div style={{ position:'fixed', inset:0, zIndex:60, background:'#f2f3f4', overflowY:'auto' }}>
+          <button onClick={() => setMostrarDash(false)}
+            style={{ margin:'16px 0 0 20px', background:'#2b3138', color:'#fff', border:'none', borderRadius:8, padding:'9px 16px', fontSize:13, cursor:'pointer' }}>
+            ← Voltar aos pedidos
+          </button>
+          <DashboardCompras email={emailLogado} />
+        </div>
+      )}
     </div>
   )
 }
