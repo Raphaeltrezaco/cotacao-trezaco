@@ -7,9 +7,8 @@ const EMAILS_COMPRAS = ['compras@trezaco.com.br', 'raphael@trezaco.com.br'];
 
 const TZ = 'America/Sao_Paulo';
 
-/* ---------- semana anterior (segunda 00:00 até domingo 23:59, Brasília) ---------- */
+/* ---------- semana corrente (segunda 00:00 até hoje 23:59, Brasília) ---------- */
 function semanaAnterior(agora = new Date()) {
-  // "hoje" no calendário de Brasília, independente do fuso da máquina
   const f = new Intl.DateTimeFormat('en-CA', {
     timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short',
   }).formatToParts(agora);
@@ -18,10 +17,9 @@ function semanaAnterior(agora = new Date()) {
 
   const dow = hoje.getUTCDay();           // 0 dom, 1 seg...
   const diasDesdeSegunda = (dow + 6) % 7; // seg=0, dom=6
-  const segundaDestaSemana = new Date(hoje.getTime() - diasDesdeSegunda * 864e5);
-  const ini = new Date(segundaDestaSemana.getTime() - 7 * 864e5);
-  const fim = segundaDestaSemana;
-  return { ini, fim, ehSegunda: dow === 1 };
+  const ini = new Date(hoje.getTime() - diasDesdeSegunda * 864e5); // segunda desta semana
+  const fim = new Date(hoje.getTime() + 864e5); // amanhã (inclui hoje inteiro)
+  return { ini, fim };
 }
 
 const fmtData = (d) =>
@@ -59,7 +57,7 @@ export default function DashboardCompras({ email }) {
   const [erro, setErro] = useState(null);
   const [dados, setDados] = useState(null);
 
-  const { ini, fim, ehSegunda } = useMemo(() => semanaAnterior(), []);
+  const { ini, fim } = useMemo(() => semanaAnterior(), []);
   const autorizado = EMAILS_COMPRAS.includes((email || '').trim().toLowerCase());
 
   useEffect(() => {
@@ -188,6 +186,11 @@ export default function DashboardCompras({ email }) {
       .map((f) => ({ rot: f, n: pedidos.filter((p) => p.filial === f).length }))
       .sort((a, b) => b.n - a.n);
 
+    // SLA 3h: pedidos com destino=comprador respondidos em até 3h
+    const sla3hDentro = slas.filter((s) => s <= 3).length
+    const sla3hFora = slas.filter((s) => s > 3).length
+    const sla3hPct = slas.length ? Math.round(sla3hDentro / slas.length * 100) : null
+
     return {
       total: pedidos.length,
       respondidos: pedidos.filter((p) => primeira.has(p.id)).length,
@@ -195,6 +198,7 @@ export default function DashboardCompras({ email }) {
       slaMediana: mediana(slas),
       slaMedia: slas.length ? slas.reduce((a, b) => a + b, 0) / slas.length : null,
       acima24: slas.filter((s) => s > 24).length,
+      sla3hDentro, sla3hFora, sla3hPct,
       kgTotal: pedidos.filter((p) => (p.unidade || '').toLowerCase() === 'kg')
         .reduce((a, p) => a + (Number(p.quantidade) || 0), 0),
       top5, faixas, abertosTotal: abertos.length, maisVelhos: abertos.slice(0, 5),
@@ -258,15 +262,8 @@ export default function DashboardCompras({ email }) {
     <div style={S.wrap}>
       <h1 style={S.h1}>Dashboard de compras</h1>
       <p style={S.sub}>
-        Semana de {fmtData(ini)} a {fmtData(new Date(fim.getTime() - 864e5))} — a semana fechada.
+        Semana de {fmtData(ini)} a {fmtData(new Date(fim.getTime() - 864e5))} — semana corrente (seg a sex).
       </p>
-
-      {ehSegunda && (
-        <div style={S.faixa}>
-          <strong>É segunda.</strong> Este é o fechamento da semana passada:
-          {' '}{num(c.total)} cotações, {num(c.kgTotal)} kg, mediana de SLA em {num(c.slaMediana, 1)} h.
-        </div>
-      )}
 
       <div style={S.grid}>
         <div style={S.card}>
@@ -278,6 +275,15 @@ export default function DashboardCompras({ email }) {
           <p style={S.lbl}>SLA da 1ª resposta</p>
           <div style={S.kpi}>{num(c.slaMediana, 1)}<span style={{ fontSize: 14 }}> h</span></div>
           <p style={S.kpiSub}>mediana · média {num(c.slaMedia, 1)} h</p>
+        </div>
+        <div style={{ ...S.card, borderTopColor: c.sla3hPct == null ? '#2b3138' : c.sla3hPct >= 90 ? '#2f6b3a' : '#b3261e' }}>
+          <p style={S.lbl}>SLA ≤ 3 h <span style={{ fontWeight:400, fontSize:10, color:'#888' }}>(meta: 90%)</span></p>
+          <div style={{ ...S.kpi, color: c.sla3hPct == null ? '#1a1d21' : c.sla3hPct >= 90 ? '#2f6b3a' : '#b3261e' }}>
+            {c.sla3hPct == null ? '—' : `${c.sla3hPct}%`}
+          </div>
+          <p style={S.kpiSub}>
+            {c.sla3hDentro} dentro · {c.sla3hFora} fora
+          </p>
         </div>
         <div style={S.card}>
           <p style={S.lbl}>Passaram de 24 h</p>
@@ -400,8 +406,9 @@ export default function DashboardCompras({ email }) {
       </div>
 
       <p style={{ fontSize: 11, color: '#3d454e', marginTop: 18 }}>
-        Semana contada de segunda a domingo, horário de Brasília. SLA = horas entre a criação do
-        pedido e a primeira resposta de fornecedor. Estoque e urgência vêm da tabela
+        Semana contada de segunda a sexta, horário de Brasília. SLA = horas entre a criação do
+        pedido e a primeira resposta de fornecedor. SLA ≤ 3h: meta de 90% das cotações respondidas
+        em até 3 horas úteis. Estoque e urgência vêm da tabela
         <code> itens_classe</code>, com a data de referência da última importação.
       </p>
     </div>
