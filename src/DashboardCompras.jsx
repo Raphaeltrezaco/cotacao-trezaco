@@ -52,6 +52,165 @@ async function todos(query, passo = 1000) {
   return out;
 }
 
+/* ---------- Histórico semanal ---------- */
+function gerarSemanas(inicio = new Date('2026-07-01T00:00:00-03:00')) {
+  const semanas = []
+  const agora = new Date()
+  let seg = new Date(inicio)
+  // Garantir que começa numa segunda
+  while (seg.getDay() !== 1) seg = new Date(seg.getTime() + 864e5)
+  while (seg < agora) {
+    const sex = new Date(seg.getTime() + 4 * 864e5)
+    semanas.push({ ini: new Date(seg), fim: new Date(sex.getTime() + 864e5) })
+    seg = new Date(seg.getTime() + 7 * 864e5)
+  }
+  return semanas.reverse() // mais recente primeiro
+}
+
+function HistoricoSemanal() {
+  const [historico, setHistorico] = useState([])
+  const [carregando, setCarregando] = useState(true)
+  const URL2 = 'https://cilbkzvuvwjeqtdpxcbs.supabase.co'
+  const KEY2 = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpbGJrenZ1dndqZXF0ZHB4Y2JzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1NzQwNTAsImV4cCI6MjA5MzE1MDA1MH0._bn3Je-gsu4Edc8SKr-fQBVW5dxCOIKn_zxqT61wq2M'
+  const H2 = { apikey: KEY2, Authorization: `Bearer ${KEY2}` }
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const semanas = gerarSemanas()
+        // Buscar todos pedidos desde 01/07 de uma vez
+        const r1 = await fetch(`${URL2}/rest/v1/pedidos_cotacao?criado_em=gte.2026-07-01T00:00:00-03:00&destino=eq.comprador&select=id,criado_em&order=criado_em.asc&limit=5000`, { headers: H2 })
+        const pedidos = await r1.json()
+
+        // Buscar todas respostas de uma vez
+        const ids = Array.isArray(pedidos) ? pedidos.map(p => p.id) : []
+        let respostas = []
+        for (let i = 0; i < ids.length; i += 200) {
+          const chunk = ids.slice(i, i + 200)
+          const r2 = await fetch(`${URL2}/rest/v1/respostas_cotacao?pedido_id=in.(${chunk.join(',')})&select=pedido_id,criado_em&order=pedido_id,criado_em.asc`, { headers: H2 })
+          const d = await r2.json()
+          if (Array.isArray(d)) respostas.push(...d)
+        }
+
+        // Primeira resposta por pedido
+        const primeira = new Map()
+        for (const r of respostas) {
+          const t = Date.parse(r.criado_em)
+          if (!r.pedido_id || isNaN(t)) continue
+          const cur = primeira.get(r.pedido_id)
+          if (cur == null || t < cur) primeira.set(r.pedido_id, t)
+        }
+
+        // Calcular por semana
+        const result = semanas.map(({ ini, fim }) => {
+          const pedSem = Array.isArray(pedidos) ? pedidos.filter(p => {
+            const t = Date.parse(p.criado_em)
+            return t >= ini.getTime() && t < fim.getTime()
+          }) : []
+          const slas = pedSem.map(p => {
+            const t1 = primeira.get(p.id)
+            return t1 == null ? null : (t1 - Date.parse(p.criado_em)) / 36e5
+          }).filter(x => x != null)
+          const dentro = slas.filter(s => s <= 3).length
+          const fora = slas.filter(s => s > 3).length
+          const pct = slas.length ? Math.round(dentro / slas.length * 100) : null
+          return { ini, fim, total: pedSem.length, respondidos: slas.length, dentro, fora, pct }
+        })
+        setHistorico(result)
+      } catch(e) { console.error(e) }
+      finally { setCarregando(false) }
+    })()
+  }, [])
+
+  const fmt = (d) => new Intl.DateTimeFormat('pt-BR', { timeZone: TZ, day: '2-digit', month: '2-digit' }).format(d)
+  const agora = Date.now()
+
+  // Agrupar por mês
+  const porMes = {}
+  for (const s of historico) {
+    const mes = new Intl.DateTimeFormat('pt-BR', { timeZone: TZ, month: 'long', year: 'numeric' }).format(s.ini)
+    if (!porMes[mes]) porMes[mes] = []
+    porMes[mes].push(s)
+  }
+
+  return (
+    <div style={{ marginTop: 24 }}>
+      <p style={{ fontSize: 11, letterSpacing: '.09em', textTransform: 'uppercase', color: '#3d454e', fontWeight: 600, margin: '0 0 12px' }}>
+        Histórico semanal — SLA de 3h
+      </p>
+      {carregando && <p style={{ fontSize: 13, color: '#3d454e' }}>Carregando histórico…</p>}
+      {!carregando && (
+        <div style={{ background: '#fff', border: '1px solid #c9ccd1', borderTop: '3px solid #2b3138', overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: '#f2f3f4', borderBottom: '2px solid #c9ccd1' }}>
+                <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: '#1a1d21' }}>Semana</th>
+                <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, color: '#1a1d21' }}>Cotações</th>
+                <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, color: '#1a1d21' }}>Respondidas</th>
+                <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, color: '#1a1d21' }}>Dentro SLA</th>
+                <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, color: '#1a1d21' }}>% SLA 3h</th>
+                <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, color: '#1a1d21' }}>Meta</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(porMes).map(([mes, semanas]) => (
+                <>
+                  <tr key={mes} style={{ background: '#1e3a5f' }}>
+                    <td colSpan={6} style={{ padding: '7px 14px', fontWeight: 700, color: '#fff', fontSize: 12, letterSpacing: '.05em', textTransform: 'uppercase' }}>{mes}</td>
+                  </tr>
+                  {semanas.map((s, i) => {
+                    const corrente = s.ini.getTime() <= agora && agora < s.fim.getTime()
+                    return (
+                      <tr key={i} style={{ borderBottom: '1px solid #eceef0', background: corrente ? '#fffbea' : undefined }}>
+                        <td style={{ padding: '9px 14px', color: '#1a1d21', fontWeight: corrente ? 700 : 400 }}>
+                          {fmt(s.ini)} a {fmt(new Date(s.fim.getTime() - 864e5))}
+                          {corrente && <span style={{ marginLeft: 6, fontSize: 10, background: '#f2b705', color: '#1a1d21', padding: '1px 5px', fontWeight: 700 }}>ATUAL</span>}
+                        </td>
+                        <td style={{ padding: '9px 14px', textAlign: 'center', fontFamily: 'monospace' }}>{s.total}</td>
+                        <td style={{ padding: '9px 14px', textAlign: 'center', fontFamily: 'monospace' }}>{s.respondidos}</td>
+                        <td style={{ padding: '9px 14px', textAlign: 'center', fontFamily: 'monospace' }}>{s.dentro}</td>
+                        <td style={{ padding: '9px 14px', textAlign: 'center', fontFamily: 'monospace', fontWeight: 700,
+                          color: s.pct == null ? '#888' : s.pct >= 90 ? '#2f6b3a' : '#b3261e' }}>
+                          {s.pct == null ? '—' : `${s.pct}%`}
+                        </td>
+                        <td style={{ padding: '9px 14px', textAlign: 'center', fontSize: 16 }}>
+                          {s.pct == null ? '—' : s.pct >= 90 ? '✅' : '❌'}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  {/* Fechamento do mês */}
+                  {(() => {
+                    const total = semanas.reduce((a, s) => a + s.total, 0)
+                    const dentro = semanas.reduce((a, s) => a + s.dentro, 0)
+                    const resp = semanas.reduce((a, s) => a + s.respondidos, 0)
+                    const pct = resp ? Math.round(dentro / resp * 100) : null
+                    return (
+                      <tr style={{ background: '#dce8f5', borderBottom: '2px solid #c9ccd1' }}>
+                        <td style={{ padding: '7px 14px', fontWeight: 700, color: '#1e3a5f', fontSize: 12 }}>Fechamento do mês</td>
+                        <td style={{ padding: '7px 14px', textAlign: 'center', fontFamily: 'monospace', fontWeight: 700 }}>{total}</td>
+                        <td style={{ padding: '7px 14px', textAlign: 'center', fontFamily: 'monospace', fontWeight: 700 }}>{resp}</td>
+                        <td style={{ padding: '7px 14px', textAlign: 'center', fontFamily: 'monospace', fontWeight: 700 }}>{dentro}</td>
+                        <td style={{ padding: '7px 14px', textAlign: 'center', fontFamily: 'monospace', fontWeight: 700,
+                          color: pct == null ? '#888' : pct >= 90 ? '#2f6b3a' : '#b3261e' }}>
+                          {pct == null ? '—' : `${pct}%`}
+                        </td>
+                        <td style={{ padding: '7px 14px', textAlign: 'center', fontSize: 16 }}>
+                          {pct == null ? '—' : pct >= 90 ? '✅' : '❌'}
+                        </td>
+                      </tr>
+                    )
+                  })()}
+                </>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function DashboardCompras({ email }) {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState(null);
@@ -93,15 +252,9 @@ export default function DashboardCompras({ email }) {
           ));
         }
 
-        const criticos = await todos(
-          supabase.from('itens_classe')
-            .select('item_codigo,filial,abc,xyz,urgencia,disponivel,comprar,dias_cobertura')
-            .neq('urgencia', 'OK')
-        );
-
         const forn = await todos(supabase.from('fornecedores').select('id,nome'));
 
-        if (vivo) setDados({ pedidos, abertos, respostas, criticos, forn });
+        if (vivo) setDados({ pedidos, abertos, respostas, forn });
       } catch (e) {
         if (vivo) setErro(e.message || String(e));
       } finally {
@@ -114,7 +267,7 @@ export default function DashboardCompras({ email }) {
 
   const calc = useMemo(() => {
     if (!dados) return null;
-    const { pedidos, abertos, respostas, criticos, forn } = dados;
+    const { pedidos, abertos, respostas, forn } = dados;
 
     // primeira resposta por pedido -> SLA
     const primeira = new Map();
@@ -157,15 +310,6 @@ export default function DashboardCompras({ email }) {
       if (f) f.n += 1;
     }
 
-    // urgência: o que foi cotado x o que ficou de fora
-    const chaveCrit = new Set(criticos.map((c) => `${c.filial}|${c.item_codigo}`));
-    const cotadosCrit = pedidos.filter((p) => chaveCrit.has(`${p.filial}|${p.item_codigo}`));
-    const cotadosSet = new Set(pedidos.map((p) => `${p.filial}|${p.item_codigo}`));
-    const naoCotados = criticos
-      .filter((c) => !cotadosSet.has(`${c.filial}|${c.item_codigo}`))
-      .sort((a, b) => (a.dias_cobertura ?? 1e9) - (b.dias_cobertura ?? 1e9))
-      .slice(0, 8);
-
     // fornecedores que responderam na semana
     const nomeForn = new Map(forn.map((f) => [f.id, f.nome]));
     const porForn = new Map();
@@ -202,7 +346,7 @@ export default function DashboardCompras({ email }) {
       kgTotal: pedidos.filter((p) => (p.unidade || '').toLowerCase() === 'kg')
         .reduce((a, p) => a + (Number(p.quantidade) || 0), 0),
       top5, faixas, abertosTotal: abertos.length, maisVelhos: abertos.slice(0, 5),
-      cotadosCrit: cotadosCrit.length, naoCotados, rankForn, porClasse, porFilial,
+      rankForn, porClasse, porFilial,
     };
   }, [dados]);
 
@@ -228,7 +372,6 @@ export default function DashboardCompras({ email }) {
     tag: (cor) => ({ fontSize: 10, fontWeight: 700, letterSpacing: '.06em', padding: '2px 6px',
       color: '#fff', background: cor, whiteSpace: 'nowrap' }),
   };
-  const corUrg = (u) => (u === 'URGENTE' ? '#b3261e' : u === 'CRÍTICO' ? '#c8641b' : '#8a7300');
 
   if (!autorizado) {
     return (
@@ -246,10 +389,6 @@ export default function DashboardCompras({ email }) {
         <div style={{ ...S.card, borderTopColor: '#b3261e' }}>
           <p style={S.lbl}>Não foi possível carregar</p>
           <p style={{ fontSize: 13, margin: 0 }}>{erro}</p>
-          <p style={{ fontSize: 12, color: '#3d454e', marginBottom: 0 }}>
-            Se a mensagem citar <code>itens_classe</code>, a tabela ainda não foi criada —
-            rode o <code>reclassificacao.sql</code> primeiro.
-          </p>
         </div>
       </div>
     );
@@ -271,19 +410,12 @@ export default function DashboardCompras({ email }) {
           <div style={S.kpi}>{num(c.total)}</div>
           <p style={S.kpiSub}>{num(c.respondidos)} respondidas · {num(c.semResposta)} sem resposta</p>
         </div>
-        <div style={S.card}>
-          <p style={S.lbl}>SLA da 1ª resposta</p>
-          <div style={S.kpi}>{num(c.slaMediana, 1)}<span style={{ fontSize: 14 }}> h</span></div>
-          <p style={S.kpiSub}>mediana · média {num(c.slaMedia, 1)} h</p>
-        </div>
         <div style={{ ...S.card, borderTopColor: c.sla3hPct == null ? '#2b3138' : c.sla3hPct >= 90 ? '#2f6b3a' : '#b3261e' }}>
-          <p style={S.lbl}>SLA ≤ 3 h <span style={{ fontWeight:400, fontSize:10, color:'#888' }}>(meta: 90%)</span></p>
+          <p style={S.lbl}>% no SLA de 3h <span style={{ fontWeight:400, fontSize:10, color:'#888' }}>meta: ≥90%</span></p>
           <div style={{ ...S.kpi, color: c.sla3hPct == null ? '#1a1d21' : c.sla3hPct >= 90 ? '#2f6b3a' : '#b3261e' }}>
             {c.sla3hPct == null ? '—' : `${c.sla3hPct}%`}
           </div>
-          <p style={S.kpiSub}>
-            {c.sla3hDentro} dentro · {c.sla3hFora} fora
-          </p>
+          <p style={S.kpiSub}>{c.sla3hDentro} dentro · {c.sla3hFora} fora do SLA</p>
         </div>
         <div style={S.card}>
           <p style={S.lbl}>Passaram de 24 h</p>
@@ -351,24 +483,7 @@ export default function DashboardCompras({ email }) {
           ))}
         </div>
 
-        <div style={S.card}>
-          <p style={S.lbl}>Estoque crítico não cotado</p>
-          <p style={{ fontSize: 12, color: '#3d454e', marginTop: -4 }}>
-            {num(c.cotadosCrit)} itens críticos foram cotados na semana. Estes não:
-          </p>
-          {c.naoCotados.length === 0 && <p style={{ fontSize: 13 }}>Nenhum item crítico de fora.</p>}
-          {c.naoCotados.map((x, i) => (
-            <div key={i} style={S.row}>
-              <span>
-                <span style={S.mono}>{x.item_codigo}</span> · {x.filial}
-                <br /><span style={{ fontSize: 11, color: '#3d454e' }}>
-                  cobertura {num(x.dias_cobertura, 1)} d · comprar {num(x.comprar)} kg
-                </span>
-              </span>
-              <span style={S.tag(corUrg(x.urgencia))}>{x.urgencia}</span>
-            </div>
-          ))}
-        </div>
+
 
         <div style={S.card}>
           <p style={S.lbl}>Fornecedores que responderam</p>
@@ -405,11 +520,13 @@ export default function DashboardCompras({ email }) {
         </div>
       </div>
 
+      {/* TABELA HISTÓRICA SEMANAL */}
+      <HistoricoSemanal />
+
       <p style={{ fontSize: 11, color: '#3d454e', marginTop: 18 }}>
         Semana contada de segunda a sexta, horário de Brasília. SLA = horas entre a criação do
         pedido e a primeira resposta de fornecedor. SLA ≤ 3h: meta de 90% das cotações respondidas
-        em até 3 horas úteis. Estoque e urgência vêm da tabela
-        <code> itens_classe</code>, com a data de referência da última importação.
+        em até 3 horas úteis.
       </p>
     </div>
   );
