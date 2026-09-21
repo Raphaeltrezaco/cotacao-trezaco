@@ -53,7 +53,11 @@ async function todos(query, passo = 1000) {
 }
 
 /* ---------- Histórico semanal ---------- */
-function gerarSemanas(inicio = new Date('2026-07-01T00:00:00-03:00')) {
+function gerarSemanas() {
+  const tresMesesAtras = new Date()
+  tresMesesAtras.setMonth(tresMesesAtras.getMonth() - 3)
+  tresMesesAtras.setHours(0, 0, 0, 0)
+  const inicio = tresMesesAtras
   const semanas = []
   const agora = new Date()
   let seg = new Date(inicio)
@@ -79,8 +83,19 @@ function HistoricoSemanal() {
       try {
         const semanas = gerarSemanas()
         // Buscar todos pedidos desde 01/07 de uma vez
-        const r1 = await fetch(`${URL2}/rest/v1/pedidos_cotacao?criado_em=gte.2026-07-01T00:00:00-03:00&destino=eq.comprador&select=id,criado_em&order=criado_em.asc&limit=5000`, { headers: H2 })
-        const pedidos = await r1.json()
+        // Buscar todos os pedidos desde 01/07 com paginação
+        let pedidos = []
+        let from = 0
+        while (true) {
+          const r1 = await fetch(`${URL2}/rest/v1/pedidos_cotacao?criado_em=gte.${(() => { const d = new Date(); d.setMonth(d.getMonth()-3); return d.toISOString().split('T')[0]; })()}T00:00:00-03:00&destino=eq.comprador&select=id,criado_em&order=criado_em.asc`, {
+            headers: { ...H2, 'Range': `${from}-${from+999}`, 'Range-Unit': 'items' }
+          })
+          const page = await r1.json()
+          if (!Array.isArray(page) || page.length === 0) break
+          pedidos.push(...page)
+          if (page.length < 1000) break
+          from += 1000
+        }
 
         // Buscar todas respostas de uma vez
         const ids = Array.isArray(pedidos) ? pedidos.map(p => p.id) : []
