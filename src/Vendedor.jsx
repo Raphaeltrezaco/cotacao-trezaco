@@ -350,7 +350,7 @@ export default function Vendedor() {
   // Agrupa pedidos por numero_cotacao (Item 1)
   const pedidosAgrupados = useMemo(() => {
     const filtrados = pedidos.filter(p => {
-      if (filtroPedidos === 'aberto' && p.status !== 'aberto') return false
+      if (filtroPedidos === 'aberto' && (p.status !== 'aberto' || p.destino !== 'comprador')) return false
       if (filtroPedidos === 'respostas_recebidas' && p.status !== 'respostas_recebidas') return false
       if (filtroDestino !== 'todos' && p.destino !== filtroDestino) return false
       if (filtroClassePedidos !== 'todos' && p.classe !== filtroClassePedidos) return false
@@ -381,7 +381,7 @@ export default function Vendedor() {
   }, [pedidos, filtroPedidos, filtroDestino, filtroClassePedidos, buscaPedidos])
 
   const pedidosFiltrados = pedidos.filter(p => {
-    if (filtroPedidos === 'aberto' && p.status !== 'aberto') return false
+    if (filtroPedidos === 'aberto' && (p.status !== 'aberto' || p.destino !== 'comprador')) return false
     if (filtroPedidos === 'respostas_recebidas' && p.status !== 'respostas_recebidas') return false
     if (filtroDestino !== 'todos' && p.destino !== filtroDestino) return false
     if (filtroClassePedidos !== 'todos' && p.classe !== filtroClassePedidos) return false
