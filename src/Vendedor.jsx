@@ -146,11 +146,23 @@ export default function Vendedor() {
   if (!usuario) return <LoginVendedor onLogin={u => setUsuario(u)} />
 
   async function carregarPedidos() {
-    const filtroUrl = verTodos
-      ? '?order=criado_em.desc'
-      : `?vendedor_id=eq.${usuario.id}&order=criado_em.desc`
-    const data = await fetchSupabase('pedidos_cotacao', filtroUrl + '&select=*,usuarios!pedidos_cotacao_vendedor_id_fkey(nome)')
-    const lista = Array.isArray(data) ? data : []
+    const SURL = 'https://cilbkzvuvwjeqtdpxcbs.supabase.co'
+    const SKEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpbGJrenZ1dndqZXF0ZHB4Y2JzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1NzQwNTAsImV4cCI6MjA5MzE1MDA1MH0._bn3Je-gsu4Edc8SKr-fQBVW5dxCOIKn_zxqT61wq2M'
+    const filtroBase = verTodos ? '' : `&vendedor_id=eq.${usuario.id}`
+    // Paginar até 5000 pedidos
+    let lista = []
+    let from = 0
+    while (true) {
+      const res = await fetch(
+        `${SURL}/rest/v1/pedidos_cotacao?order=criado_em.desc${filtroBase}&select=*,usuarios!pedidos_cotacao_vendedor_id_fkey(nome)`,
+        { headers: { 'apikey': SKEY, 'Authorization': `Bearer ${SKEY}`, 'Range': `${from}-${from+999}`, 'Range-Unit': 'items' } }
+      )
+      const page = await res.json()
+      if (!Array.isArray(page) || page.length === 0) break
+      lista.push(...page)
+      if (page.length < 1000 || lista.length >= 5000) break
+      from += 1000
+    }
     setPedidos(lista)
     const precos = {}
     for (const p of lista.filter(p => p.status === 'respostas_recebidas')) {
