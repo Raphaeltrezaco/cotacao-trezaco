@@ -629,6 +629,16 @@ export default function Comprador() {
                 <div><div style={s.metaLabel}>Lead time resposta</div><div style={s.metaVal}>{formatarLeadTime(leadtimes[selecionado.id])}</div></div>
               </div>
               {selecionado.observacoes && <div style={s.obs}>{selecionado.observacoes}</div>}
+
+              {retornosVendedor[selecionado.id] && (
+                <div style={{ background:'#FFF4ED', border:'1.5px solid #E07B39', borderRadius:8, padding:'12px 14px', marginTop:8 }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:'#E07B39', letterSpacing:'.05em', textTransform:'uppercase', marginBottom:6 }}>↩ Retorno do vendedor</div>
+                  <div style={{ fontSize:14, color:'#1a1a18', fontWeight:500 }}>{retornosVendedor[selecionado.id].valor_novo}</div>
+                  <div style={{ fontSize:11, color:'#888780', marginTop:4 }}>
+                    {retornosVendedor[selecionado.id].editado_por} · {new Date(retornosVendedor[selecionado.id].editado_em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}
+                  </div>
+                </div>
+              )}
             </>
           ) : (
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
