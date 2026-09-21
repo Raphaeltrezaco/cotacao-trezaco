@@ -187,17 +187,20 @@ export default function Vendedor() {
   async function devolverAoComprador() {
     if (!textoDevolucao.trim()) return
     setEnviandoDevolucao(true)
+    const SURL = 'https://cilbkzvuvwjeqtdpxcbs.supabase.co'
+    const SKEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpbGJrenZ1dndqZXF0ZHB4Y2JzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1NzQwNTAsImV4cCI6MjA5MzE1MDA1MH0._bn3Je-gsu4Edc8SKr-fQBVW5dxCOIKn_zxqT61wq2M'
+    const SH = { 'apikey': SKEY, 'Authorization': `Bearer ${SKEY}`, 'Content-Type': 'application/json' }
     try {
       // Salvar no log
-      await fetch(`${URL}/rest/v1/pedidos_cotacao_log`, {
+      await fetch(`${SURL}/rest/v1/pedidos_cotacao_log`, {
         method: 'POST',
-        headers: { 'apikey': KEY, 'Authorization': `Bearer ${KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+        headers: { ...SH, 'Prefer': 'return=representation' },
         body: JSON.stringify({ pedido_id: pedidoAberto.id, editado_por: usuario.nome || usuario.email, campo: 'retorno_vendedor', valor_anterior: 'respostas_recebidas', valor_novo: textoDevolucao.trim() })
       })
       // Voltar status para aberto
-      await fetch(`${URL}/rest/v1/pedidos_cotacao?id=eq.${pedidoAberto.id}`, {
+      await fetch(`${SURL}/rest/v1/pedidos_cotacao?id=eq.${pedidoAberto.id}`, {
         method: 'PATCH',
-        headers: { 'apikey': KEY, 'Authorization': `Bearer ${KEY}`, 'Content-Type': 'application/json' },
+        headers: SH,
         body: JSON.stringify({ status: 'aberto' })
       })
       // Atualizar lista local
