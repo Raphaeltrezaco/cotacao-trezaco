@@ -83,19 +83,22 @@ function HistoricoSemanal() {
       try {
         const semanas = gerarSemanas()
         // Buscar todos pedidos desde 01/07 de uma vez
-        // Buscar todos os pedidos desde 01/07 com paginação
+        // Buscar todos os pedidos dos últimos 3 meses com paginação completa
+        const dataIni3m = (() => { const d = new Date(); d.setMonth(d.getMonth()-3); return d.toISOString().split('T')[0]; })()
         let pedidos = []
         let from = 0
         while (true) {
-          const r1 = await fetch(`${URL2}/rest/v1/pedidos_cotacao?criado_em=gte.${(() => { const d = new Date(); d.setMonth(d.getMonth()-3); return d.toISOString().split('T')[0]; })()}T00:00:00-03:00&destino=eq.comprador&select=id,criado_em&order=criado_em.asc`, {
-            headers: { ...H2, 'Range': `${from}-${from+999}`, 'Range-Unit': 'items' }
-          })
+          const r1 = await fetch(
+            `${URL2}/rest/v1/pedidos_cotacao?criado_em=gte.${dataIni3m}T00:00:00-03:00&destino=eq.comprador&select=id,criado_em&order=criado_em.asc`,
+            { headers: { ...H2, 'Range': `${from}-${from+999}`, 'Range-Unit': 'items', 'Prefer': 'count=none' } }
+          )
           const page = await r1.json()
           if (!Array.isArray(page) || page.length === 0) break
           pedidos.push(...page)
           if (page.length < 1000) break
           from += 1000
         }
+        console.log('Total pedidos histórico:', pedidos.length)
 
         // Buscar todas respostas de uma vez
         const ids = Array.isArray(pedidos) ? pedidos.map(p => p.id) : []
