@@ -94,7 +94,7 @@ function LoginComprador({ onLogin }) {
   )
 }
 
-function PedidoCard({ p, onClick, leadtime }) {
+function PedidoCard({ p, onClick, leadtime, retorno }) {
   return (
     <div onClick={onClick} style={{ background:'#fff', borderRadius:10, border:'0.5px solid rgba(0,0,0,0.1)', padding:'1rem', marginBottom:8, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
       <div style={{ flex:1 }}>
@@ -104,6 +104,9 @@ function PedidoCard({ p, onClick, leadtime }) {
           {p.numero_cotacao && <span style={{ display:'inline-flex', alignItems:'center', padding:'3px 8px', borderRadius:5, fontSize:12, fontWeight:500, background:'#F1EFE8', color:'#444441' }}>ORC #{p.numero_cotacao}</span>}
           {leadtime !== null && leadtime !== undefined && (
             <span style={{ display:'inline-flex', alignItems:'center', padding:'3px 8px', borderRadius:5, fontSize:12, fontWeight:500, background:'#E6F1FB', color:'#0C447C' }}>⏱ {formatarLeadTime(leadtime)}</span>
+          )}
+          {retorno && (
+            <span style={{ display:'inline-flex', alignItems:'center', padding:'3px 8px', borderRadius:5, fontSize:12, fontWeight:600, background:'#E07B39', color:'#fff' }}>↩ Retorno do vendedor</span>
           )}
         </div>
         <div style={{ fontWeight:500, fontSize:15, marginBottom:3 }}>{p.item_descricao}</div>
@@ -118,6 +121,7 @@ export default function Comprador() {
   const [emailLogado, setEmailLogado] = useState(() => sessionStorage.getItem('comprador_email') || null)
   const [pedidos, setPedidos] = useState([])
   const [leadtimes, setLeadtimes] = useState({})
+  const [retornosVendedor, setRetornosVendedor] = useState({})
   const [selecionado, setSelecionado] = useState(null)
   const [respostas, setRespostas] = useState([])
   const [historico, setHistorico] = useState([])
@@ -176,6 +180,16 @@ export default function Comprador() {
     }
     const pedidosComGrupo = pedidosList.map(p => ({ ...p, item_grupo: grupoMap[p.item_codigo] || null }))
     setPedidos(pedidosComGrupo)
+
+    // Buscar retornos do vendedor do log
+    const logRetornos = await fetchSupabase('pedidos_cotacao_log', '?campo=eq.retorno_vendedor&select=pedido_id,valor_novo,editado_por,editado_em&order=editado_em.desc')
+    const retornosMap = {}
+    if (Array.isArray(logRetornos)) {
+      for (const l of logRetornos) {
+        if (!retornosMap[l.pedido_id]) retornosMap[l.pedido_id] = l
+      }
+    }
+    setRetornosVendedor(retornosMap)
     const ltMap = {}
     for (const p of pedidosList.filter(p => p.status !== 'aberto')) {
       const resps = await fetchSupabase('respostas_cotacao', `?pedido_id=eq.${p.id}&order=criado_em.asc&limit=1`)
@@ -934,7 +948,7 @@ export default function Comprador() {
                 <div style={{ fontSize:13, color:'#888780', marginBottom:12 }}>
                   {pedidosFiltrados.length} {pedidosFiltrados.length===1?'pedido':'pedidos'}{pedidosFiltrados.length !== pedidos.length ? ` de ${pedidos.length}` : ''}
                 </div>
-                {pedidosFiltrados.map(p => <PedidoCard key={p.id} p={p} onClick={() => abrirPedido(p)} leadtime={leadtimes[p.id]} />)}
+                {pedidosFiltrados.map(p => <PedidoCard key={p.id} p={p} onClick={() => abrirPedido(p)} leadtime={leadtimes[p.id]} retorno={retornosVendedor[p.id]} />)}
               </>
           }
 </main>

@@ -131,6 +131,9 @@ export default function Vendedor() {
   const [editando, setEditando] = useState(false)
   const [formEdicao, setFormEdicao] = useState({})
   const [logEdicao, setLogEdicao] = useState([])
+  const [showDevolucao, setShowDevolucao] = useState(false)
+  const [textoDevolucao, setTextoDevolucao] = useState('')
+  const [enviandoDevolucao, setEnviandoDevolucao] = useState(false)
   const [showLog, setShowLog] = useState(false)
   const [buscaPedidos, setBuscaPedidos] = useState('')
   const [filtroPedidos, setFiltroPedidos] = useState('todos')
@@ -179,6 +182,31 @@ export default function Vendedor() {
     }
     console.log("LEADTIMES:", ltMap, "total:", Object.keys(ltMap).length)
     setLeadtimesVend(ltMap)
+  }
+
+  async function devolverAoComprador() {
+    if (!textoDevolucao.trim()) return
+    setEnviandoDevolucao(true)
+    try {
+      // Salvar no log
+      await fetch(`${URL}/rest/v1/pedidos_cotacao_log`, {
+        method: 'POST',
+        headers: { 'apikey': KEY, 'Authorization': `Bearer ${KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+        body: JSON.stringify({ pedido_id: pedidoAberto.id, editado_por: usuario.nome || usuario.email, campo: 'retorno_vendedor', valor_anterior: 'respostas_recebidas', valor_novo: textoDevolucao.trim() })
+      })
+      // Voltar status para aberto
+      await fetch(`${URL}/rest/v1/pedidos_cotacao?id=eq.${pedidoAberto.id}`, {
+        method: 'PATCH',
+        headers: { 'apikey': KEY, 'Authorization': `Bearer ${KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'aberto' })
+      })
+      // Atualizar lista local
+      setPedidos(prev => prev.map(p => p.id === pedidoAberto.id ? { ...p, status: 'aberto' } : p))
+      setShowDevolucao(false)
+      setTextoDevolucao('')
+      setPedidoAberto(null)
+    } catch(e) { alert('Erro ao devolver: ' + e.message) }
+    finally { setEnviandoDevolucao(false) }
   }
 
   async function abrirPedido(pedido) {
@@ -800,6 +828,36 @@ export default function Vendedor() {
                 {pedidoAberto.destino === 'comprador'
                   ? 'Aguardando o comprador lançar as respostas dos fornecedores.'
                   : 'Nenhuma resposta registrada ainda.'}
+              </div>
+            )}
+
+            {/* Botão devolver ao comprador */}
+            {pedidoAberto.destino === 'comprador' && pedidoAberto.status === 'respostas_recebidas' && (
+              <div style={{ ...s.card, marginTop: 12, borderLeft: '3px solid #E07B39' }}>
+                {!showDevolucao ? (
+                  <button onClick={() => setShowDevolucao(true)}
+                    style={{ background: '#E07B39', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', width: '100%' }}>
+                    ↩ Devolver ao comprador
+                  </button>
+                ) : (
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8, color: '#E07B39' }}>↩ Devolver ao comprador</div>
+                    <p style={{ fontSize: 12, color: '#888780', margin: '0 0 8px' }}>Informe o motivo da devolução — o comprador verá essa mensagem:</p>
+                    <textarea value={textoDevolucao} onChange={e => setTextoDevolucao(e.target.value)}
+                      placeholder="Ex: PRECISA SER NO 2,00mm, não pode substituir por 2,25mm"
+                      style={{ width: '100%', minHeight: 80, padding: 10, borderRadius: 8, border: '1px solid #E07B39', fontSize: 13, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                      <button onClick={devolverAoComprador} disabled={!textoDevolucao.trim() || enviandoDevolucao}
+                        style={{ flex: 1, background: '#E07B39', color: '#fff', border: 'none', borderRadius: 8, padding: '10px', fontSize: 14, fontWeight: 600, cursor: 'pointer', opacity: !textoDevolucao.trim() || enviandoDevolucao ? 0.5 : 1 }}>
+                        {enviandoDevolucao ? 'Enviando...' : 'Confirmar devolução'}
+                      </button>
+                      <button onClick={() => { setShowDevolucao(false); setTextoDevolucao('') }}
+                        style={{ padding: '10px 16px', background: 'none', border: '1px solid #ccc', borderRadius: 8, fontSize: 14, cursor: 'pointer' }}>
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
