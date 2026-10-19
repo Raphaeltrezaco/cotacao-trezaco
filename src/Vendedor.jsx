@@ -31,6 +31,7 @@ const EMAILS_VENDEDORES = [
   'benildo@trezaco.com.br',
   'vendas1@trezaco.com.br',
   'vendas2@trezaco.com.br',
+  'vendas4@trezaco.com.br',
 ]
 
 function LoginVendedor({ onLogin }) {
