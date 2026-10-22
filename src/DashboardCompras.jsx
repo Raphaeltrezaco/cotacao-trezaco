@@ -53,6 +53,29 @@ async function todos(query, passo = 1000) {
 }
 
 /* ---------- Histórico semanal ---------- */
+/* ---------- horas úteis (seg-sex 8h-18h, Brasília) ---------- */
+function horasUteis(inicio, fim) {
+  if (!inicio || !fim) return null
+  const TZ2 = 'America/Sao_Paulo'
+  let start = new Date(inicio), end = new Date(fim)
+  if (end <= start) return 0
+  let mins = 0
+  let cur = new Date(start)
+  while (cur < end) {
+    // hora local Brasília
+    const partes = new Intl.DateTimeFormat('en-US', {
+      timeZone: TZ2, hour: 'numeric', weekday: 'short', hour12: false
+    }).formatToParts(cur)
+    const wd = partes.find(p => p.type === 'weekday').value // Mon,Tue...
+    const h = parseInt(partes.find(p => p.type === 'hour').value)
+    const dUtil = !['Sat','Sun'].includes(wd)
+    if (dUtil && h >= 8 && h < 18) mins++
+    cur = new Date(cur.getTime() + 60000)
+    if (mins > 14400) return 240 // cap 30 dias úteis
+  }
+  return mins / 60
+}
+
 function gerarSemanas() {
   const tresMesesAtras = new Date()
   tresMesesAtras.setMonth(tresMesesAtras.getMonth() - 3)
@@ -127,7 +150,7 @@ function HistoricoSemanal() {
           }) : []
           const slas = pedSem.map(p => {
             const t1 = primeira.get(p.id)
-            return t1 == null ? null : (t1 - Date.parse(p.criado_em)) / 36e5
+            return t1 == null ? null : horasUteis(new Date(Date.parse(p.criado_em)), new Date(t1))
           }).filter(x => x != null)
           const dentro = slas.filter(s => s <= 3).length
           const fora = slas.filter(s => s > 3).length
@@ -297,7 +320,7 @@ export default function DashboardCompras({ email }) {
     }
     const slas = pedidos.map((p) => {
       const t1 = primeira.get(p.id);
-      return t1 == null ? null : (t1 - Date.parse(p.criado_em)) / 36e5;
+      return t1 == null ? null : horasUteis(new Date(Date.parse(p.criado_em)), new Date(t1));
     }).filter((x) => x != null);
 
     // top 5 itens da semana
